@@ -344,14 +344,8 @@ It builds trust through code, not intermediaries.
 - DAO-based governance  
 - Zero-knowledge identity integration  
 - National-scale welfare deployment  
-- Real-time audit dashboards  
-
----
-
-# 👥 Team
-
-**IMAGINARY_CODER**  
-
+- Real-time audit dashboards
+  
 ---
 
 ## 📜 License
