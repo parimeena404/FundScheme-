@@ -5,8 +5,6 @@
 **Idea :**  ExcessScheme is a decentralized mediator platform built on the Algorand blockchain that seamlessly connects government/organizations with citizens. Government departments, NGOs, and private organizations deposit funds (scholarships, subsidies, donations) which are converted into Algorand Standard Assets (ASA) – unique tokens for each scheme. Citizens register using Aadhaar/PAN verification, and their information is securely stored on the blockchain while maintaining privacy. Through smart contracts, payments are automatically distributed to citizens' wallets, making the entire process transparent, traceable, and tamper-proof. The platform also provides liquidity through tokenization (e.g., students can use scholarship tokens later). Additionally, our AI/ML monitoring system analyzes transaction patterns in real-time to detect and prevent money mule activities, ensuring funds reach the right beneficiaries and reducing fraud significantly.
 
 
-**Team Name:** IMAGINARY_CODER  
-
 ---
 
 ## 📸 Screenshots
