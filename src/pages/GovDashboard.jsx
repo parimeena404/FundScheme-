@@ -91,6 +91,19 @@ export default function GovDashboard() {
   const [apps, setApps] = useState(APPLICATIONS)
   const [flags, setFlags] = useState(AI_FLAGS)
   const [showCreateScheme, setShowCreateScheme] = useState(false)
+  const [customSchemes, setCustomSchemes] = useState([])
+  const [toast, setToast] = useState(null)
+  const [appDetail, setAppDetail] = useState(null)
+
+  // Create scheme form state
+  const [newScheme, setNewScheme] = useState({
+    name: '', cat: 'Merit', amount: '', budget: '', deadline: '', criteria: '', ministry: ''
+  })
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3500)
+  }
 
   // ── Contract state ──────────────────────────────────
   const [contractGlobal,  setContractGlobal]  = useState(null)
@@ -162,12 +175,46 @@ export default function GovDashboard() {
 
   const handleLogout = () => { sessionStorage.removeItem('gov_org'); navigate('/') }
 
-  const filteredSchemes = SCHEMES.filter(s =>
+  const allSchemes = [...SCHEMES, ...customSchemes]
+  const filteredSchemes = allSchemes.filter(s =>
     !schemeFilter || s.name.toLowerCase().includes(schemeFilter.toLowerCase())
   )
   const filteredApps = apps.filter(a =>
     appFilter === 'all' || a.status === appFilter
   )
+
+  // ── Create Scheme handler ─────────────────────────────────────────
+  const handleCreateScheme = () => {
+    if (!newScheme.name.trim()) { showToast('Scheme name is required.', 'error'); return }
+    if (!newScheme.amount) { showToast('Amount per student is required.', 'error'); return }
+    if (!newScheme.budget) { showToast('Total budget is required.', 'error'); return }
+    if (!newScheme.deadline) { showToast('Deadline is required.', 'error'); return }
+    if (!newScheme.criteria.trim()) { showToast('Eligibility criteria is required.', 'error'); return }
+
+    const scheme = {
+      id: `SCH-CUSTOM-${Date.now()}`,
+      name: newScheme.name.trim(),
+      cat: newScheme.cat,
+      budget: Number(newScheme.budget),
+      benef: Math.floor((Number(newScheme.budget) * 10000000) / Number(newScheme.amount)),
+      amount: Number(newScheme.amount),
+      filled: 0,
+      status: 'active',
+      deadline: newScheme.deadline,
+      ministry: newScheme.ministry.trim() || orgName,
+      criteria: newScheme.criteria.trim(),
+    }
+    setCustomSchemes(prev => [...prev, scheme])
+    setShowCreateScheme(false)
+    setNewScheme({ name: '', cat: 'Merit', amount: '', budget: '', deadline: '', criteria: '', ministry: '' })
+    showToast(`✅ Scheme "${scheme.name}" created and tokenized successfully!`)
+  }
+
+  // ── Approve/Reject application handler ──────────────────────────────
+  const handleAppAction = (appId, action) => {
+    setApps(prev => prev.map(x => x.id === appId ? { ...x, status: action } : x))
+    showToast(`Application ${appId} ${action.toLowerCase()} successfully.`)
+  }
 
   return (
     <div className="dash-body">
@@ -201,6 +248,13 @@ export default function GovDashboard() {
           </div>
         </div>
 
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`dash-toast ${toast.type}`} onClick={() => setToast(null)}>
+            {toast.msg}
+          </div>
+        )}
+
         {/* OVERVIEW */}
         {tab === 'overview' && (
           <div className="tab-content active">
@@ -216,14 +270,18 @@ export default function GovDashboard() {
             </div>
             <div className="kpi-grid">
               {[
-                { label:'Active Schemes',  val:'7',          trend:'↑ 3 added this quarter', cls:'kpi-accent', icon:'🏛️' },
+                { label:'Active Schemes',  val: String(allSchemes.filter(s=>s.status==='active').length), trend:'↑ Tracking live schemes', cls:'kpi-accent', icon:'🏛️' },
                 { label:'Total Budget',    val:'₹601 Cr',    trend:'Union Budget 2026 allocation', cls:'', icon:'💰' },
                 { label:'Tokens Minted',  val:'26,700',      trend:'₹17.5 Cr tokenised on-chain', cls:'', icon:'🔗' },
-                { label:'Applications',   val:'3,841',       trend:'↑ 312 in last 7 days', cls:'', icon:'📝' },
-                { label:'AI Flags',       val:'6',           trend:'3 critical · 3 warning', cls:'kpi-warn', icon:'🚨' },
+                { label:'Applications',   val: String(apps.length.toLocaleString()), trend:`↑ ${apps.filter(a=>a.status==='Pending Review').length} pending review`, cls:'', icon:'📝' },
+                { label:'AI Flags',       val: String(flags.length), trend:`${flags.filter(f=>f.type==='critical').length} critical · ${flags.filter(f=>f.type==='warning').length} warning`, cls:'kpi-warn', icon:'🚨' },
                 { label:'Distributed',    val:'₹17.5 Cr',    trend:'68.1% AI pass rate', cls:'', icon:'💸' },
               ].map(k => (
-                <div key={k.label} className={`kpi-card${k.cls?' '+k.cls:''}`}>
+                <div key={k.label} className={`kpi-card${k.cls?' '+k.cls:''}`} onClick={() => {
+                  if (k.label === 'Applications') setTab('applications')
+                  else if (k.label === 'AI Flags') setTab('flags')
+                  else if (k.label === 'Active Schemes') setTab('schemes')
+                }} style={{ cursor: ['Applications','AI Flags','Active Schemes'].includes(k.label) ? 'pointer' : 'default' }}>
                   <div className="kpi-top">
                     <span className="kpi-label">{k.label}</span>
                     <span className="kpi-icon">{k.icon}</span>
@@ -247,6 +305,7 @@ export default function GovDashboard() {
               <div className="table-card">
                 <div className="table-card-header">
                   <span className="chart-title" style={{ margin:0 }}>Recent Transactions</span>
+                  <button className="btn-sm btn-view" onClick={() => setTab('blockchain')}>View All →</button>
                 </div>
                 <table className="dash-table">
                   <thead><tr><th>TX Hash</th><th>Scheme</th><th>Amount</th><th>Tokens</th><th>Status</th><th>Block</th></tr></thead>
@@ -267,10 +326,11 @@ export default function GovDashboard() {
               <div className="table-card">
                 <div className="table-card-header">
                   <span className="chart-title" style={{ margin:0 }}>AI Alerts</span>
+                  <button className="btn-sm btn-view" onClick={() => setTab('flags')}>View All →</button>
                 </div>
                 <div className="alerts-feed">
-                  {AI_FLAGS.slice(0,4).map(f => (
-                    <div key={f.id} className={`alert-item ${f.type}`}>
+                  {flags.slice(0,4).map(f => (
+                    <div key={f.id} className={`alert-item ${f.type}`} onClick={() => setTab('flags')} style={{ cursor:'pointer' }}>
                       <span className="alert-icon">{f.type==='critical'?'🔴':'🟡'}</span>
                       <div className="alert-body">
                         <div className="alert-title">{f.reason}</div>
@@ -480,7 +540,7 @@ export default function GovDashboard() {
                   className={`btn-sm${appFilter===f?' btn-approve':' btn-view'}`}
                   onClick={() => setAppFilter(f)}
                 >
-                  {f === 'all' ? 'All' : f}
+                  {f === 'all' ? `All (${apps.length})` : `${f} (${apps.filter(a=>a.status===f).length})`}
                 </button>
               ))}
             </div>
@@ -502,12 +562,16 @@ export default function GovDashboard() {
                     <>
                       <button
                         className="btn-sm btn-approve"
-                        onClick={() => setApps(prev => prev.map(x => x.id===a.id ? {...x,status:'Approved'} : x))}
+                        onClick={() => handleAppAction(a.id, 'Approved')}
                       >✓ Approve</button>
                       <button
                         className="btn-sm btn-reject"
-                        onClick={() => setApps(prev => prev.map(x => x.id===a.id ? {...x,status:'Rejected'} : x))}
+                        onClick={() => handleAppAction(a.id, 'Rejected')}
                       >✕ Reject</button>
+                      <button
+                        className="btn-sm btn-view"
+                        onClick={() => setAppDetail(a)}
+                      >👁 View</button>
                     </>
                   ) : a.status === 'Approved' ? (
                     <>
@@ -529,7 +593,7 @@ export default function GovDashboard() {
                       >💸 Payout</button>
                     </>
                   ) : (
-                    <button className="btn-sm btn-view">View</button>
+                    <button className="btn-sm btn-view" onClick={() => setAppDetail(a)}>View</button>
                   )}
                 </div>
               </div>
@@ -547,6 +611,13 @@ export default function GovDashboard() {
                 <span className="fs-chip warning">🟡 {flags.filter(f=>f.type==='warning').length} Warning</span>
               </div>
             </div>
+            {flags.length === 0 && (
+              <div style={{ textAlign:'center', padding:'3rem', color:'var(--text-2)' }}>
+                <div style={{ fontSize:'3rem', marginBottom:'1rem' }}>✅</div>
+                <h3>All Clear!</h3>
+                <p>No pending fraud flags. All anomalies have been resolved.</p>
+              </div>
+            )}
             {flags.map(f => (
               <div key={f.id} className={`flag-card ${f.type}`}>
                 <div className="flag-header">
@@ -563,13 +634,21 @@ export default function GovDashboard() {
                 </div>
                 <div className="flag-details">{f.detail}</div>
                 <div className="flag-actions">
-                  <button className="btn-sm btn-reject" onClick={() => setFlags(prev => prev.filter(x=>x.id!==f.id))}>
+                  <button className="btn-sm btn-reject" onClick={() => {
+                    setFlags(prev => prev.filter(x=>x.id!==f.id))
+                    showToast(`🚫 Student ${f.student} blocked.`)
+                  }}>
                     Block Student
                   </button>
-                  <button className="btn-sm btn-approve" onClick={() => setFlags(prev => prev.filter(x=>x.id!==f.id))}>
+                  <button className="btn-sm btn-approve" onClick={() => {
+                    setFlags(prev => prev.filter(x=>x.id!==f.id))
+                    showToast(`✅ Flag ${f.id} resolved.`)
+                  }}>
                     Mark Resolved
                   </button>
-                  <button className="btn-sm btn-view">Request Documents</button>
+                  <button className="btn-sm btn-view" onClick={() => showToast(`📧 Document request sent to ${f.student}.`)}>
+                    Request Documents
+                  </button>
                 </div>
               </div>
             ))}
@@ -589,7 +668,7 @@ export default function GovDashboard() {
                   <div className="rc-title">{r.title}</div>
                   <div className="rc-desc">{r.desc}</div>
                   <div className="rc-meta">{r.meta}</div>
-                  <button className="btn-sm btn-view" onClick={() => alert('Downloading ' + r.title)}>
+                  <button className="btn-sm btn-view" onClick={() => showToast(`📥 Downloading "${r.title}"...`)}>
                     ⬇ Download PDF
                   </button>
                 </div>
@@ -607,19 +686,89 @@ export default function GovDashboard() {
             <div className="modal-title">Create New Scheme</div>
             <div className="modal-sub">Define the scheme parameters for tokenization.</div>
             <div className="modal-form">
-              <div className="form-group"><label>Scheme Name</label><input type="text" placeholder="e.g. National Merit Award 2026" /></div>
-              <div className="form-row">
-                <div className="form-group"><label>Category</label><select className="filter-select" style={{width:'100%'}}><option>Merit</option><option>Need-Based</option><option>Disability</option><option>Minority</option></select></div>
-                <div className="form-group"><label>Amount per Student (₹)</label><input type="number" placeholder="50000" /></div>
+              <div className="form-group">
+                <label>Scheme Name *</label>
+                <input type="text" placeholder="e.g. National Merit Award 2026"
+                  value={newScheme.name} onChange={e => setNewScheme({...newScheme, name: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Ministry / Department</label>
+                <input type="text" placeholder={orgName || 'e.g. Ministry of Education'}
+                  value={newScheme.ministry} onChange={e => setNewScheme({...newScheme, ministry: e.target.value})} />
               </div>
               <div className="form-row">
-                <div className="form-group"><label>Total Budget (₹ Cr)</label><input type="number" placeholder="50" /></div>
-                <div className="form-group"><label>Deadline</label><input type="date" /></div>
+                <div className="form-group">
+                  <label>Category</label>
+                  <select className="filter-select" style={{width:'100%'}}
+                    value={newScheme.cat} onChange={e => setNewScheme({...newScheme, cat: e.target.value})}>
+                    <option>Merit</option><option>Need-Based</option><option>Disability</option><option>Minority</option><option>Research</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Amount per Student (₹) *</label>
+                  <input type="number" placeholder="50000"
+                    value={newScheme.amount} onChange={e => setNewScheme({...newScheme, amount: e.target.value})} />
+                </div>
               </div>
-              <div className="form-group"><label>Eligibility Criteria</label><input type="text" placeholder="Describe criteria…" /></div>
-              <button className="btn-primary w-full" onClick={() => { alert('Scheme created!'); setShowCreateScheme(false) }}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Total Budget (₹ Cr) *</label>
+                  <input type="number" placeholder="50"
+                    value={newScheme.budget} onChange={e => setNewScheme({...newScheme, budget: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label>Deadline *</label>
+                  <input type="date"
+                    value={newScheme.deadline} onChange={e => setNewScheme({...newScheme, deadline: e.target.value})} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Eligibility Criteria *</label>
+                <input type="text" placeholder="Describe criteria…"
+                  value={newScheme.criteria} onChange={e => setNewScheme({...newScheme, criteria: e.target.value})} />
+              </div>
+              <button className="btn-primary w-full" onClick={handleCreateScheme}>
                 Create & Tokenize
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* APPLICATION DETAIL MODAL */}
+      {appDetail && (
+        <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && setAppDetail(null)}>
+          <div className="modal-box" style={{ maxWidth:'600px' }}>
+            <button className="modal-close" onClick={() => setAppDetail(null)}>✕</button>
+            <div className="modal-title">Application Details</div>
+            <div className="modal-sub">{appDetail.id}</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginTop:'1.2rem' }}>
+              {[
+                { label:'Student Name', val: appDetail.name },
+                { label:'Student ID', val: appDetail.studentId },
+                { label:'Institution', val: appDetail.inst },
+                { label:'Course', val: appDetail.course },
+                { label:'Scheme', val: appDetail.scheme },
+                { label:'Amount', val: `₹${appDetail.amount.toLocaleString()}` },
+                { label:'AI Trust Score', val: `${appDetail.aiScore}/100` },
+                { label:'Status', val: appDetail.status },
+                { label:'Applied On', val: appDetail.date },
+                { label:'Reviewed By', val: appDetail.officer || 'Pending' },
+              ].map(item => (
+                <div key={item.label} style={{ padding:'.7rem', background:'var(--bg)', borderRadius:'8px', border:'1px solid var(--border-2)' }}>
+                  <div style={{ fontSize:'.72rem', color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.04em', marginBottom:'.25rem' }}>{item.label}</div>
+                  <div style={{ fontSize:'.88rem', fontWeight:600 }}>{item.val}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display:'flex', gap:'.75rem', marginTop:'1.5rem' }}>
+              {(appDetail.status === 'Pending Review' || appDetail.status === 'AI Verified') && (
+                <>
+                  <button className="btn-primary" style={{ flex:1 }} onClick={() => { handleAppAction(appDetail.id, 'Approved'); setAppDetail(null) }}>✓ Approve</button>
+                  <button className="btn-sm btn-reject" style={{ flex:1, padding:'.6rem' }} onClick={() => { handleAppAction(appDetail.id, 'Rejected'); setAppDetail(null) }}>✕ Reject</button>
+                </>
+              )}
+              <button className="btn-sm btn-view" style={{ flex:1, padding:'.6rem' }} onClick={() => setAppDetail(null)}>Close</button>
             </div>
           </div>
         </div>

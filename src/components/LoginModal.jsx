@@ -34,6 +34,82 @@ function checkOtp(key, entered) {
   } catch { return 'OTP validation error.' }
 }
 
+/* ─── SEED DEMO ACCOUNTS ON FIRST LOAD ─────────────────────────────── */
+async function seedDemoAccounts() {
+  // Seed demo citizen
+  const citizens = readDB(CITIZEN_KEY)
+  if (!citizens.find(u => u.phone === '9876543210')) {
+    const passwordHash = await sha256('citizen123')
+    const aadhaarHash = await sha256('123456789012')
+    citizens.push({
+      id: 'demo-citizen-001',
+      name: 'Priya Kumari',
+      phone: '9876543210',
+      passwordHash,
+      aadhaarHash,
+      aadhaarLast4: '9012',
+      employment: 'Student',
+      createdAt: '2026-01-15T10:00:00.000Z',
+    })
+    writeDB(CITIZEN_KEY, citizens)
+  }
+
+  // Seed second demo citizen
+  if (!citizens.find(u => u.phone === '9988776655')) {
+    const passwordHash = await sha256('demo1234')
+    citizens.push({
+      id: 'demo-citizen-002',
+      name: 'Arjun Patel',
+      phone: '9988776655',
+      passwordHash,
+      aadhaarHash: null,
+      aadhaarLast4: null,
+      employment: 'Employed – Government',
+      createdAt: '2026-01-20T10:00:00.000Z',
+    })
+    writeDB(CITIZEN_KEY, readDB(CITIZEN_KEY).concat(citizens.filter(u => u.id === 'demo-citizen-002')))
+  }
+
+  // Seed demo gov org
+  const govs = readDB(GOV_KEY)
+  if (!govs.find(o => o.orgId === 'ES-GOV-0001')) {
+    const passwordHash = await sha256('govdemo123')
+    govs.push({
+      id: 'demo-gov-001',
+      orgName: 'Ministry of Education — NSP Division',
+      website: 'https://scholarships.gov.in',
+      scheme: 'PM Scholarship Scheme',
+      email: 'nsp@education.gov.in',
+      contact: 'Rajiv Sharma',
+      passwordHash,
+      orgId: 'ES-GOV-0001',
+      status: 'active',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    })
+    writeDB(GOV_KEY, govs)
+  }
+
+  // Seed second demo gov org
+  if (!govs.find(o => o.orgId === 'ES-MPC-0002')) {
+    const passwordHash = await sha256('mpdemo123')
+    govs.push({
+      id: 'demo-gov-002',
+      orgName: 'MP Education Department',
+      website: 'https://education.mp.gov.in',
+      scheme: 'Mukhyamantri Medhavi Vidyarthi Yojana',
+      email: 'mmvy@mp.gov.in',
+      contact: 'Anil Tripathi',
+      passwordHash,
+      orgId: 'ES-MPC-0002',
+      status: 'active',
+      createdAt: '2026-01-05T00:00:00.000Z',
+    })
+    writeDB(GOV_KEY, readDB(GOV_KEY).concat(govs.filter(o => o.id === 'demo-gov-002')))
+  }
+}
+// Run seed on import
+seedDemoAccounts()
+
 /* ─── Employment options ─────────────────────────────────────────────── */
 const EMP_OPTS = [
   'Student', 'Employed – Government', 'Employed – Private Sector',
@@ -282,6 +358,20 @@ function GovAuth({ onDone }) {
           <div className="modal-step-title">Officer Sign In</div>
           <p className="modal-step-sub">Enter your credentials to access the control panel</p>
           <MsgBox msg={err} type="error" />
+
+          {/* Demo credentials hint */}
+          <div className="demo-credentials-box">
+            <div className="demo-cred-title">🔑 Demo Credentials</div>
+            <div className="demo-cred-row">
+              <span>Org ID:</span><code>ES-GOV-0001</code>
+              <button type="button" className="copy-btn" onClick={() => { setLoginOrgId('ES-GOV-0001'); clr() }}>Use</button>
+            </div>
+            <div className="demo-cred-row">
+              <span>Password:</span><code>govdemo123</code>
+              <button type="button" className="copy-btn" onClick={() => { setLoginPass('govdemo123'); clr() }}>Use</button>
+            </div>
+          </div>
+
           <div className="form-group">
             <label>Organisation ID</label>
             <input type="text" placeholder="ES-XXX-0000" value={loginOrgId}
@@ -490,6 +580,20 @@ function CitizenAuth({ onDone }) {
           <div className="modal-step-title">Sign In / Register</div>
           <p className="modal-step-sub">Enter your mobile number to continue</p>
           <MsgBox msg={err} type="error" />
+
+          {/* Demo credentials hint */}
+          <div className="demo-credentials-box">
+            <div className="demo-cred-title">🔑 Demo Credentials</div>
+            <div className="demo-cred-row">
+              <span>Phone:</span><code>9876543210</code>
+              <button type="button" className="copy-btn" onClick={() => { setPhone('9876543210'); clr() }}>Use</button>
+            </div>
+            <div className="demo-cred-row">
+              <span>Password:</span><code>citizen123</code>
+            </div>
+            <div className="demo-cred-note">Use password login after OTP step, or enter the demo OTP shown</div>
+          </div>
+
           <div className="form-group">
             <label>Mobile Number</label>
             <div className="phone-input-wrap">

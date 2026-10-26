@@ -4,6 +4,34 @@ export default function Sidebar({ role, tabs, activeTab, onTabChange, open, onCl
   const navigate = useNavigate()
   const isGov = role === 'gov'
 
+  // Read actual logged-in user from session
+  let userName = isGov ? 'Gov Officer' : 'Citizen'
+  let userId = isGov ? 'OFF-001' : 'STU-001'
+  let initials = 'GO'
+  try {
+    if (isGov) {
+      const org = JSON.parse(sessionStorage.getItem('gov_org') || 'null')
+      if (org) {
+        userName = org.orgName || 'Gov Officer'
+        userId = org.orgId || 'OFF-001'
+        initials = userName.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
+      }
+    } else {
+      const citizen = JSON.parse(sessionStorage.getItem('citizen_user') || 'null')
+      if (citizen) {
+        userName = citizen.name || 'Citizen'
+        userId = citizen.phone ? '+91 ' + citizen.phone : 'STU-001'
+        initials = userName.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()
+      }
+    }
+  } catch {}
+
+  const handleLogout = () => {
+    if (isGov) sessionStorage.removeItem('gov_org')
+    else sessionStorage.removeItem('citizen_user')
+    navigate('/')
+  }
+
   return (
     <>
       {/* Backdrop overlay — tap to close on mobile */}
@@ -38,14 +66,14 @@ export default function Sidebar({ role, tabs, activeTab, onTabChange, open, onCl
       <div className="sidebar-footer">
         <div className="sidebar-user">
           <div className={`su-avatar ${isGov ? 'gov-avatar' : 'user-avatar'}`}>
-            {isGov ? 'GO' : 'PK'}
+            {initials}
           </div>
           <div className="su-info">
-            <span className="su-name">{isGov ? 'Govt. Officer' : 'Priya Kumari'}</span>
-            <span className="su-id">{isGov ? 'OFF-2026-001' : 'STU-2026-0042'}</span>
+            <span className="su-name">{userName.length > 22 ? userName.slice(0,22) + '…' : userName}</span>
+            <span className="su-id">{userId}</span>
           </div>
         </div>
-        <span className="logout-btn" onClick={() => navigate('/')} style={{ cursor:'pointer' }}>
+        <span className="logout-btn" onClick={handleLogout} style={{ cursor:'pointer' }}>
           Logout
         </span>
       </div>

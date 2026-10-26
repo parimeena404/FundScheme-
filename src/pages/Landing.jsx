@@ -287,7 +287,7 @@ export default function Landing() {
             <a href="#ai">AI Verify</a>
             <a onClick={() => navigate('/wallet')} style={{ cursor:'pointer' }}>◎ Wallet</a>
             <a onClick={() => navigate('/about')} style={{ cursor:'pointer' }}>About</a>
-            <a href="#login" className="btn-nav">Launch App →</a>
+            <a onClick={() => setLoginRole('user')} style={{ cursor:'pointer' }} className="btn-nav">Launch App →</a>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:'.75rem' }}>
             <ThemeToggle />
@@ -622,9 +622,9 @@ export default function Landing() {
           <div className="footer-links">
             <div className="fl-col">
               <span className="fl-head">Platform</span>
-              <a href="#">Gov Portal</a>
-              <a href="#">Citizen Portal</a>
-              <a href="#">AI Verify</a>
+              <a onClick={() => setLoginRole('gov')} style={{ cursor:'pointer' }}>Gov Portal</a>
+              <a onClick={() => setLoginRole('user')} style={{ cursor:'pointer' }}>Citizen Portal</a>
+              <a onClick={() => navigate('/ai-verify')} style={{ cursor:'pointer' }}>AI Verify</a>
             </div>
             <div className="fl-col">
               <span className="fl-head">Company</span>

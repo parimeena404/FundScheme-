@@ -68,13 +68,32 @@ export default function UserDashboard() {
   const [tab, setTab] = useState('overview')
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024)
   const [browseFilter, setBrowseFilter] = useState('')
+  const [browseCategory, setBrowseCategory] = useState('All Categories')
   const [applyModal, setApplyModal] = useState(null)
   const [verifyRunning, setVerifyRunning] = useState(false)
   const [verifyStep, setVerifyStep] = useState(-1)
   const [verifyDone, setVerifyDone] = useState(false)
+  const [myApps, setMyApps] = useState(MY_APPLICATIONS)
+  const [toast, setToast] = useState(null)
+  const [appDetail, setAppDetail] = useState(null)
+
+  // Upload states for verify
+  const [verifyUploads, setVerifyUploads] = useState({
+    aadhaar: false, marksheet: false, income: false, bank: false
+  })
+
+  // Apply form state
+  const [applyForm, setApplyForm] = useState({
+    name: '', studentId: '', institution: '', income: ''
+  })
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3500)
+  }
 
   // ── Contract state ──────────────────────────────────────
-  const [chainStatus,   setChainStatus]   = useState(null)   // { isRegistered, milestoneCompleted, hasBeenPaid }
+  const [chainStatus,   setChainStatus]   = useState(null)
   const [chainOptedIn,  setChainOptedIn]  = useState(false)
   const [chainLoading,  setChainLoading]  = useState(false)
   const [chainError,    setChainError]    = useState(null)
@@ -142,7 +161,9 @@ export default function UserDashboard() {
   const handleLogout = () => { sessionStorage.removeItem('citizen_user'); navigate('/') }
 
   const filteredSchemes = SCHEMES.filter(s =>
-    s.status === 'active' && (!browseFilter || s.name.toLowerCase().includes(browseFilter.toLowerCase()))
+    s.status === 'active' &&
+    (!browseFilter || s.name.toLowerCase().includes(browseFilter.toLowerCase())) &&
+    (browseCategory === 'All Categories' || s.cat === browseCategory)
   )
 
   const runVerify = () => {
@@ -153,6 +174,26 @@ export default function UserDashboard() {
       setVerifyStep(i)
       if (i >= AI_STEPS.length) { clearInterval(iv); setVerifyDone(true); setVerifyRunning(false) }
     }, 900)
+  }
+
+  // ── Submit application handler ──────────────────────────────────
+  const handleSubmitApplication = () => {
+    if (!applyForm.name.trim()) { showToast('Please enter your name.', 'error'); return }
+    if (!applyForm.institution.trim()) { showToast('Please enter your institution.', 'error'); return }
+
+    const newApp = {
+      id: `APP-2026-${String(Date.now()).slice(-6)}`,
+      scheme: applyModal.name,
+      date: new Date().toLocaleDateString('en-IN', {year:'numeric', month:'2-digit', day:'2-digit'}).split('/').reverse().join('-'),
+      amount: applyModal.amount,
+      status: 'Pending Review',
+      aiScore: Math.floor(70 + Math.random() * 25),
+      remarks: 'Submitted — in queue for AI verification',
+    }
+    setMyApps(prev => [newApp, ...prev])
+    setApplyModal(null)
+    setApplyForm({ name: '', studentId: '', institution: '', income: '' })
+    showToast(`✅ Application submitted for "${applyModal.name}"! AI verification will begin automatically.`)
   }
 
   return (
@@ -184,6 +225,13 @@ export default function UserDashboard() {
           </div>
         </div>
 
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`dash-toast ${toast.type}`} onClick={() => setToast(null)}>
+            {toast.msg}
+          </div>
+        )}
+
         {/* OVERVIEW */}
         {tab === 'overview' && (
           <div className="tab-content active">
@@ -199,14 +247,16 @@ export default function UserDashboard() {
             </div>
             <div className="kpi-grid">
               {[
-                { label:'Active Applications', val:'3',         icon:'📝', cls:'kpi-accent' },
-                { label:'Tokens Received',     val:'2',         icon:'💎', cls:'' },
-                { label:'Total Scholarship',   val:'₹62,000',   icon:'💰', cls:'' },
-                { label:'AI Trust Score',      val:'88/100',    icon:'🛡️', cls:'kpi-accent' },
-                { label:'Pending Distribution',val:'1 token',   icon:'⏳', cls:'kpi-warn' },
-                { label:'Amount Redeemable',   val:'₹62,000',   icon:'✅', cls:'' },
+                { label:'Active Applications', val: String(myApps.filter(a => a.status !== 'Rejected').length), icon:'📝', cls:'kpi-accent', action: 'applications' },
+                { label:'Tokens Received',     val: String(myApps.filter(a => a.status === 'Approved').length), icon:'💎', cls:'', action: 'onchain' },
+                { label:'Total Scholarship',   val:'₹' + myApps.filter(a=>a.status==='Approved').reduce((s,a)=>s+a.amount,0).toLocaleString(), icon:'💰', cls:'', action: null },
+                { label:'AI Trust Score',      val:'88/100',    icon:'🛡️', cls:'kpi-accent', action: 'verify' },
+                { label:'Pending Review',      val: String(myApps.filter(a=>a.status==='Pending Review').length) + ' apps', icon:'⏳', cls:'kpi-warn', action: 'applications' },
+                { label:'Browse Schemes',      val: String(SCHEMES.filter(s=>s.status==='active').length) + ' active', icon:'🔍', cls:'', action: 'browse' },
               ].map(k => (
-                <div key={k.label} className={`kpi-card${k.cls?' '+k.cls:''}`}>
+                <div key={k.label} className={`kpi-card${k.cls?' '+k.cls:''}`}
+                  onClick={() => k.action && setTab(k.action)}
+                  style={{ cursor: k.action ? 'pointer' : 'default' }}>
                   <div className="kpi-top">
                     <span className="kpi-label">{k.label}</span>
                     <span className="kpi-icon">{k.icon}</span>
@@ -267,10 +317,12 @@ export default function UserDashboard() {
                 value={browseFilter}
                 onChange={e => setBrowseFilter(e.target.value)}
               />
-              <select className="filter-select">
+              <select className="filter-select" value={browseCategory} onChange={e => setBrowseCategory(e.target.value)}>
                 <option>All Categories</option>
                 <option>Merit</option>
                 <option>Need-Based</option>
+                <option>Minority</option>
+                <option>Research</option>
               </select>
             </div>
             <div className="schemes-grid">
@@ -294,12 +346,22 @@ export default function UserDashboard() {
                       </div>
                       <span className="sc-pct">{s.filled}% filled</span>
                     </div>
-                    <button className="btn-sm btn-approve" onClick={() => setApplyModal(s)}>
+                    <button className="btn-sm btn-approve" onClick={() => {
+                      setApplyForm({ name: citizenName, studentId: `STU-2026-${String(Date.now()).slice(-4)}`, institution: '', income: '' })
+                      setApplyModal(s)
+                    }}>
                       Apply →
                     </button>
                   </div>
                 </div>
               ))}
+              {filteredSchemes.length === 0 && (
+                <div style={{ gridColumn:'1/-1', textAlign:'center', padding:'3rem', color:'var(--text-2)' }}>
+                  <div style={{ fontSize:'3rem', marginBottom:'1rem' }}>🔍</div>
+                  <h3>No schemes found</h3>
+                  <p>Try adjusting your search or filter criteria.</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -309,20 +371,30 @@ export default function UserDashboard() {
           <div className="tab-content active">
             <div className="tab-header-row">
               <div><h2>My Applications</h2><p>Track your scholarship applications.</p></div>
+              <button className="btn-primary" onClick={() => setTab('browse')}>+ Apply for More</button>
             </div>
-            <div className="apps-list">
-              {MY_APPLICATIONS.map(a => (
-                <div key={a.id} className="my-app-card">
-                  <div>
-                    <div className="mac-scheme">{a.scheme}</div>
-                    <div className="mac-date">{a.date}</div>
+            {myApps.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'3rem', color:'var(--text-2)' }}>
+                <div style={{ fontSize:'3rem', marginBottom:'1rem' }}>📝</div>
+                <h3>No Applications Yet</h3>
+                <p>Browse schemes and submit your first application.</p>
+                <button className="btn-primary" style={{ marginTop:'1rem' }} onClick={() => setTab('browse')}>Browse Schemes →</button>
+              </div>
+            ) : (
+              <div className="apps-list">
+                {myApps.map(a => (
+                  <div key={a.id} className="my-app-card">
+                    <div>
+                      <div className="mac-scheme">{a.scheme}</div>
+                      <div className="mac-date">{a.date}</div>
+                    </div>
+                    <StatusBadge status={a.status} />
+                    <div className="mac-amount">₹{a.amount.toLocaleString()}</div>
+                    <button className="btn-sm btn-view" onClick={() => setAppDetail(a)}>View Details</button>
                   </div>
-                  <StatusBadge status={a.status} />
-                  <div className="mac-amount">₹{a.amount.toLocaleString()}</div>
-                  <button className="btn-sm btn-view">View Details</button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -379,7 +451,6 @@ export default function UserDashboard() {
                   </div>
                 ) : null}
 
-                {/* How-it-works flow */}
                 {chainStatus?.hasBeenPaid && (
                   <div style={{ background:'rgba(16,185,129,.08)', border:'1px solid rgba(16,185,129,.25)', borderRadius:'10px', padding:'1rem', textAlign:'center', color:'#10b981', fontWeight:700, fontSize:'.9rem' }}>
                     🎉 Scholarship payout has been sent to your wallet!
@@ -443,10 +514,37 @@ export default function UserDashboard() {
           <div className="tab-content active">
             <div className="tab-header-row">
               <div><h2>AI Verify Me</h2><p>Run your identity through the 7-step AI pipeline.</p></div>
+              <button className="btn-sm btn-view" onClick={() => navigate('/ai-verify')}>
+                Open Full AI Engine →
+              </button>
             </div>
             <div className="ai-verify-layout">
               <div className="verify-steps-card">
                 <h3>Verification Pipeline</h3>
+
+                {/* Upload section */}
+                <div style={{ marginBottom:'1.5rem' }}>
+                  <div style={{ fontSize:'.82rem', color:'var(--text-2)', marginBottom:'.75rem', fontWeight:600 }}>📎 Upload Documents</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.5rem' }}>
+                    {[
+                      { key:'aadhaar', label:'Aadhaar Card', icon:'🪪' },
+                      { key:'marksheet', label:'Marksheet', icon:'📋' },
+                      { key:'income', label:'Income Certificate', icon:'💰' },
+                      { key:'bank', label:'Bank Statement', icon:'🏦' },
+                    ].map(doc => (
+                      <div
+                        key={doc.key}
+                        className={`mini-upload-zone${verifyUploads[doc.key] ? ' uploaded' : ''}`}
+                        onClick={() => setVerifyUploads(u => ({ ...u, [doc.key]: true }))}
+                        style={{ cursor:'pointer' }}
+                      >
+                        <span>{verifyUploads[doc.key] ? '✅' : doc.icon}</span>
+                        <span style={{ fontSize:'.78rem' }}>{doc.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="vsteps">
                   {AI_STEPS.map((s, i) => (
                     <div
@@ -496,9 +594,22 @@ export default function UserDashboard() {
                   </>
                 ) : (
                   <div style={{ color:'var(--text-2)', fontSize:'.9rem', paddingTop:'1rem' }}>
-                    Click "Start AI Verification" to run the full pipeline on your documents.
-                    <br/><br/>
-                    You'll need: Aadhaar, Marksheet, Income Certificate, Bank Statement.
+                    {Object.values(verifyUploads).every(Boolean) ? (
+                      <>
+                        ✅ All documents uploaded!<br/><br/>
+                        Click "Start AI Verification" to run the full pipeline.
+                      </>
+                    ) : (
+                      <>
+                        Upload all 4 documents first, then click "Start AI Verification" to run the pipeline.
+                        <br/><br/>
+                        <strong>Required:</strong> Aadhaar, Marksheet, Income Certificate, Bank Statement.
+                        <br/><br/>
+                        <span style={{ fontSize:'.82rem', color:'var(--text-3)' }}>
+                          {Object.values(verifyUploads).filter(Boolean).length}/4 documents uploaded
+                        </span>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -516,18 +627,78 @@ export default function UserDashboard() {
             <div className="modal-title">Apply — {applyModal.name}</div>
             <div className="modal-sub">Amount: ₹{applyModal.amount?.toLocaleString()} · Deadline: {applyModal.deadline}</div>
             <div className="modal-form">
-              <div className="form-group"><label>Full Name</label><input type="text" defaultValue="Priya Kumari" /></div>
-              <div className="form-group"><label>Student ID</label><input type="text" defaultValue="STU-2026-0042" /></div>
-              <div className="form-group"><label>Institution</label><input type="text" placeholder="Your college/school" /></div>
-              <div className="form-group"><label>Family Annual Income (₹)</label><input type="number" placeholder="Enter income" /></div>
+              <div className="form-group">
+                <label>Full Name *</label>
+                <input type="text" value={applyForm.name}
+                  onChange={e => setApplyForm({...applyForm, name: e.target.value})}
+                  placeholder="Your full name" />
+              </div>
+              <div className="form-group">
+                <label>Student ID</label>
+                <input type="text" value={applyForm.studentId}
+                  onChange={e => setApplyForm({...applyForm, studentId: e.target.value})}
+                  placeholder="Auto-generated" readOnly style={{ opacity: .7 }} />
+              </div>
+              <div className="form-group">
+                <label>Institution *</label>
+                <input type="text" value={applyForm.institution}
+                  onChange={e => setApplyForm({...applyForm, institution: e.target.value})}
+                  placeholder="Your college/school" />
+              </div>
+              <div className="form-group">
+                <label>Family Annual Income (₹)</label>
+                <input type="number" value={applyForm.income}
+                  onChange={e => setApplyForm({...applyForm, income: e.target.value})}
+                  placeholder="Enter income" />
+              </div>
+              <div style={{ background:'var(--bg)', border:'1px solid var(--border-2)', borderRadius:'8px', padding:'.75rem', marginBottom:'.75rem', fontSize:'.82rem', color:'var(--text-2)' }}>
+                <strong>Eligibility:</strong> {applyModal.criteria}
+              </div>
               <button
                 type="button"
                 className="btn-primary w-full"
-                onClick={() => { alert('Application submitted! AI verification will begin automatically.'); setApplyModal(null) }}
+                onClick={handleSubmitApplication}
               >
-                Submit Application
+                Submit Application →
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* APPLICATION DETAIL MODAL */}
+      {appDetail && (
+        <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && setAppDetail(null)}>
+          <div className="modal-box" style={{ maxWidth:'520px' }}>
+            <button className="modal-close" onClick={() => setAppDetail(null)}>✕</button>
+            <div className="modal-title">Application Details</div>
+            <div className="modal-sub">{appDetail.id}</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.75rem', marginTop:'1.2rem' }}>
+              {[
+                { label:'Scheme', val: appDetail.scheme },
+                { label:'Amount', val: `₹${appDetail.amount.toLocaleString()}` },
+                { label:'Status', val: appDetail.status },
+                { label:'AI Score', val: `${appDetail.aiScore}/100` },
+                { label:'Applied On', val: appDetail.date },
+                { label:'Remarks', val: appDetail.remarks || 'None' },
+              ].map(item => (
+                <div key={item.label} style={{ padding:'.7rem', background:'var(--bg)', borderRadius:'8px', border:'1px solid var(--border-2)' }}>
+                  <div style={{ fontSize:'.72rem', color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.04em', marginBottom:'.25rem' }}>{item.label}</div>
+                  <div style={{ fontSize:'.85rem', fontWeight:600 }}>{item.val}</div>
+                </div>
+              ))}
+            </div>
+            {appDetail.status === 'Approved' && (
+              <div style={{ background:'rgba(16,185,129,.08)', border:'1px solid rgba(16,185,129,.25)', borderRadius:'10px', padding:'.85rem 1rem', marginTop:'1rem', color:'#10b981', fontSize:'.85rem', textAlign:'center', fontWeight:600 }}>
+                🎉 Application approved! Token will be minted on-chain.
+              </div>
+            )}
+            {appDetail.status === 'Rejected' && (
+              <div style={{ background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.25)', borderRadius:'10px', padding:'.85rem 1rem', marginTop:'1rem', color:'#ef4444', fontSize:'.85rem' }}>
+                ❌ <strong>Reason:</strong> {appDetail.remarks}
+              </div>
+            )}
+            <button className="btn-sm btn-view" style={{ width:'100%', marginTop:'1rem', padding:'.6rem' }} onClick={() => setAppDetail(null)}>Close</button>
           </div>
         </div>
       )}
