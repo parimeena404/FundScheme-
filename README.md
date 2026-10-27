@@ -19,7 +19,8 @@
 
 | Banner 3 | Banner 4 |
 |:--------:|:--------:|
-| ![Banner 3](public/banner3.jpg) | ![Banner 4](public/banner4.jpg) |
+| ![Banner 3](p
+ublic/banner3.jpg) | ![Banner 4](public/banner4.jpg) |
 
 | Banner 5 | Banner 6 |
 |:--------:|:--------:|
