@@ -245,10 +245,28 @@ export default function UserDashboard() {
       aiScore: Math.floor(82 + Math.random() * 14),
       remarks: 'Submitted — queued for Algorand smart contract verification',
     }
-    setMyApps(prev => [newApp, ...prev])
+    setMyApps(prev => {
+      const updated = [newApp, ...prev]
+      // Persist to sessionStorage so apps survive tab switches
+      try { sessionStorage.setItem('my_apps', JSON.stringify(updated)) } catch {}
+      return updated
+    })
+
+    // Add notification for the submitted application
+    setUserNotifs(prev => [{
+      id: Date.now(),
+      title: '📝 Application Submitted!',
+      desc: `Your application for "${applyModal.name}" (${newApp.id}) has been submitted and is queued for AI verification.`,
+      time: 'Just now',
+      read: false,
+    }, ...prev])
+
     setApplyModal(null)
     setApplyForm({ name: '', studentId: '', institution: '', income: '', course: '', bankIfsc: '', bankAcc: '' })
-    showToast(`✅ Application submitted for "${applyModal.name}"! AI verification initialized.`)
+    showToast(`✅ Application submitted for "${applyModal.name}"! Switching to My Applications…`)
+
+    // Auto-switch to My Applications tab after a brief delay
+    setTimeout(() => setTab('applications'), 600)
   }
 
   // ── Withdraw application handler ────────────────────────────────
@@ -872,35 +890,193 @@ Status             : CONFIRMED ON-CHAIN
                 Open Full AI Engine →
               </button>
             </div>
+
+            {/* ─── Demo Student Details Card ───────────────────────── */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.5rem'
+            }}>
+              <div className="table-card" style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '.85rem', marginBottom: '1.2rem' }}>
+                  <div style={{
+                    width: '52px', height: '52px', borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #818CF8, #6366F1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.4rem', color: '#fff', fontWeight: 800, flexShrink: 0
+                  }}>
+                    {profile.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{profile.name}</div>
+                    <div style={{ fontSize: '.82rem', color: 'var(--text-2)' }}>{profile.studentId} · {profile.institution}</div>
+                  </div>
+                  <div style={{
+                    marginLeft: 'auto', background: aadhaarLinked ? 'rgba(16,185,129,.12)' : 'rgba(239,68,68,.12)',
+                    color: aadhaarLinked ? '#10b981' : '#ef4444',
+                    padding: '.3rem .75rem', borderRadius: '8px', fontSize: '.76rem', fontWeight: 700
+                  }}>
+                    {aadhaarLinked ? '✔ e-KYC Linked' : '✗ Not Verified'}
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+                  {[
+                    { label: 'Course & Branch', value: profile.course },
+                    { label: 'CGPA / Marks', value: profile.cgpa },
+                    { label: 'Annual Family Income', value: profile.income },
+                    { label: 'Bank Account', value: profile.bankAcc },
+                    { label: 'Aadhaar (Last 4)', value: `XXXX-XXXX-${profile.aadhaarLast4}` },
+                    { label: 'IFSC Code', value: profile.ifsc },
+                  ].map(row => (
+                    <div key={row.label} style={{
+                      padding: '.6rem .85rem', background: 'var(--bg)',
+                      border: '1px solid var(--border-2)', borderRadius: '9px'
+                    }}>
+                      <div style={{ fontSize: '.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '.2rem' }}>{row.label}</div>
+                      <div style={{ fontSize: '.88rem', fontWeight: 600 }}>{row.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Uploaded Documents Summary */}
+              <div className="table-card" style={{ padding: '1.5rem' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+                  📂 Uploaded Documents
+                  <span style={{
+                    marginLeft: 'auto', fontSize: '.75rem', fontWeight: 700,
+                    background: Object.values(verifyUploads).every(v => v) ? 'rgba(16,185,129,.12)' : 'rgba(245,158,11,.12)',
+                    color: Object.values(verifyUploads).every(v => v) ? '#10b981' : '#f59e0b',
+                    padding: '.25rem .65rem', borderRadius: '7px'
+                  }}>
+                    {Object.values(verifyUploads).filter(v => v).length}/4 Ready
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '.65rem' }}>
+                  {[
+                    { key: 'aadhaar', label: 'Aadhaar Card (e-KYC)', icon: '🪪', demoFile: 'aadhaar_ekyc_XXXX4821.pdf', demoSize: '248 KB' },
+                    { key: 'marksheet', label: 'Academic Marksheet', icon: '📋', demoFile: 'BITS_Pilani_sem6_marksheet.pdf', demoSize: '1.2 MB' },
+                    { key: 'income', label: 'Income Certificate', icon: '💰', demoFile: 'income_cert_FY2025-26.pdf', demoSize: '186 KB' },
+                    { key: 'bank', label: 'Bank Statement / Passbook', icon: '🏦', demoFile: 'HDFC_statement_Q4.pdf', demoSize: '420 KB' },
+                  ].map(doc => (
+                    <div key={doc.key} style={{
+                      display: 'flex', alignItems: 'center', gap: '.75rem',
+                      padding: '.7rem .85rem', background: 'var(--bg)',
+                      border: `1px solid ${verifyUploads[doc.key] ? 'rgba(16,185,129,.3)' : 'var(--border-2)'}`,
+                      borderRadius: '10px', transition: 'all .2s'
+                    }}>
+                      <span style={{ fontSize: '1.2rem' }}>{verifyUploads[doc.key] ? '✅' : doc.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '.85rem', fontWeight: 600 }}>{doc.label}</div>
+                        {verifyUploads[doc.key] ? (
+                          <div style={{ fontSize: '.74rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '.4rem', marginTop: '.15rem' }}>
+                            📄 {doc.demoFile} <span style={{ color: 'var(--text-3)' }}>({doc.demoSize})</span>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '.74rem', color: 'var(--text-3)', marginTop: '.15rem' }}>Not uploaded yet</div>
+                        )}
+                      </div>
+                      <label style={{
+                        background: verifyUploads[doc.key] ? 'rgba(239,68,68,.1)' : 'rgba(129,140,248,.1)',
+                        color: verifyUploads[doc.key] ? '#ef4444' : 'var(--accent)',
+                        padding: '.35rem .7rem', borderRadius: '7px',
+                        fontSize: '.78rem', fontWeight: 600, cursor: 'pointer',
+                        border: `1px solid ${verifyUploads[doc.key] ? 'rgba(239,68,68,.2)' : 'rgba(129,140,248,.25)'}`,
+                        transition: 'all .2s'
+                      }}>
+                        {verifyUploads[doc.key] ? '✕ Remove' : '📤 Upload'}
+                        <input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) {
+                              setVerifyUploads(u => ({ ...u, [doc.key]: true }))
+                              showToast(`✅ Uploaded: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`)
+                            }
+                            e.target.value = ''
+                          }}
+                          onClick={(e) => {
+                            if (verifyUploads[doc.key]) {
+                              e.preventDefault()
+                              setVerifyUploads(u => ({ ...u, [doc.key]: false }))
+                              showToast(`Removed ${doc.label}`)
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {!Object.values(verifyUploads).every(v => v) && (
+                  <div style={{
+                    marginTop: '.85rem', padding: '.65rem .85rem', borderRadius: '9px',
+                    background: 'rgba(245,158,11,.06)', border: '1px solid rgba(245,158,11,.18)',
+                    fontSize: '.8rem', color: '#f59e0b', lineHeight: 1.5
+                  }}>
+                    ⚠️ Upload all 4 documents before running the AI verification pipeline for full trust score.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ─── Verification Pipeline + Trust Score ─────────────── */}
             <div className="ai-verify-layout">
               <div className="verify-steps-card">
                 <h3>Verification Pipeline</h3>
 
-                {/* Upload section */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ fontSize: '.82rem', color: 'var(--text-2)', marginBottom: '.75rem', fontWeight: 600 }}>📎 Upload Verification Credentials</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.5rem' }}>
-                    {[
-                      { key: 'aadhaar', label: 'Aadhaar Card (e-KYC)', icon: '🪪' },
-                      { key: 'marksheet', label: 'Academic Marksheet', icon: '📋' },
-                      { key: 'income', label: 'Income Certificate', icon: '💰' },
-                      { key: 'bank', label: 'Bank Statement / Passbook', icon: '🏦' },
-                    ].map(doc => (
-                      <div
-                        key={doc.key}
-                        className={`mini-upload-zone${verifyUploads[doc.key] ? ' uploaded' : ''}`}
-                        onClick={() => {
-                          const next = !verifyUploads[doc.key]
-                          setVerifyUploads(u => ({ ...u, [doc.key]: next }))
-                          showToast(next ? `Uploaded ${doc.label}` : `Removed ${doc.label}`)
-                        }}
-                        style={{ cursor: 'pointer' }}
-                        title="Click to toggle upload simulation"
-                      >
-                        <span>{verifyUploads[doc.key] ? '✅' : doc.icon}</span>
-                        <span style={{ fontSize: '.78rem' }}>{doc.label}</span>
-                      </div>
-                    ))}
+                {/* Drag & Drop Upload Zone */}
+                <div
+                  style={{
+                    marginBottom: '1.5rem', padding: '1.2rem',
+                    border: '2px dashed var(--border-2)', borderRadius: '12px',
+                    textAlign: 'center', cursor: 'pointer',
+                    background: 'var(--bg)', transition: 'all .2s'
+                  }}
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#818CF8'; e.currentTarget.style.background = 'rgba(129,140,248,.05)' }}
+                  onDragLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.background = 'var(--bg)' }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    e.currentTarget.style.borderColor = 'var(--border-2)'
+                    e.currentTarget.style.background = 'var(--bg)'
+                    const files = Array.from(e.dataTransfer.files)
+                    if (files.length > 0) {
+                      const keys = ['aadhaar', 'marksheet', 'income', 'bank']
+                      const emptyKeys = keys.filter(k => !verifyUploads[k])
+                      files.forEach((f, idx) => {
+                        if (idx < emptyKeys.length) {
+                          setVerifyUploads(u => ({ ...u, [emptyKeys[idx]]: true }))
+                        }
+                      })
+                      showToast(`📤 ${files.length} file(s) attached for verification`)
+                    }
+                  }}
+                  onClick={() => {
+                    const fileInput = document.createElement('input')
+                    fileInput.type = 'file'
+                    fileInput.accept = '.pdf,.jpg,.jpeg,.png'
+                    fileInput.multiple = true
+                    fileInput.onchange = (evt) => {
+                      const files = Array.from(evt.target.files)
+                      if (files.length > 0) {
+                        const keys = ['aadhaar', 'marksheet', 'income', 'bank']
+                        const emptyKeys = keys.filter(k => !verifyUploads[k])
+                        files.forEach((f, idx) => {
+                          if (idx < emptyKeys.length) {
+                            setVerifyUploads(u => ({ ...u, [emptyKeys[idx]]: true }))
+                          }
+                        })
+                        showToast(`📤 ${files.length} file(s) attached for verification`)
+                      }
+                    }
+                    fileInput.click()
+                  }}
+                >
+                  <div style={{ fontSize: '2rem', marginBottom: '.4rem', opacity: .7 }}>📁</div>
+                  <div style={{ fontSize: '.88rem', fontWeight: 600, color: 'var(--text-1)' }}>
+                    Drag & Drop documents here
+                  </div>
+                  <div style={{ fontSize: '.78rem', color: 'var(--text-3)', marginTop: '.25rem' }}>
+                    or click to browse — accepts PDF, JPG, PNG
                   </div>
                 </div>
 
@@ -944,6 +1120,27 @@ Status             : CONFIRMED ON-CHAIN
                         TXID: V7KQMN3PXRWSTF4DHJBL8CGAZE2YNI6OULM5Q3P
                       </span>
                     </div>
+
+                    {/* Verification Breakdown */}
+                    <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '.45rem' }}>
+                      {[
+                        { label: 'UIDAI e-KYC Match', score: '98%', color: '#10b981' },
+                        { label: 'Academic Record Validity', score: '96%', color: '#10b981' },
+                        { label: 'Forgery Detection', score: 'CLEAR', color: '#10b981' },
+                        { label: 'Duplicate Identity Check', score: 'UNIQUE', color: '#10b981' },
+                        { label: 'Income Cross-Reference', score: '91%', color: '#f59e0b' },
+                      ].map(item => (
+                        <div key={item.label} style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '.45rem .7rem', background: 'var(--bg)',
+                          border: '1px solid var(--border-2)', borderRadius: '7px', fontSize: '.8rem'
+                        }}>
+                          <span style={{ color: 'var(--text-2)' }}>{item.label}</span>
+                          <span style={{ fontWeight: 700, color: item.color, fontFamily: 'monospace' }}>{item.score}</span>
+                        </div>
+                      ))}
+                    </div>
+
                     <button
                       className="btn-primary w-full"
                       style={{ marginTop: '1rem' }}
@@ -953,9 +1150,34 @@ Status             : CONFIRMED ON-CHAIN
                     </button>
                   </>
                 ) : (
-                  <div style={{ color: 'var(--text-2)', fontSize: '.88rem', paddingTop: '1rem', lineHeight: 1.6 }}>
-                    All 4 credentials are required for autonomous on-chain pre-approval. Click <strong>"Start AI Verification"</strong> to initiate real-time optical character recognition, forgery analysis, and vector duplicate screening.
-                  </div>
+                  <>
+                    <div style={{ color: 'var(--text-2)', fontSize: '.88rem', paddingTop: '1rem', lineHeight: 1.6 }}>
+                      All 4 credentials are required for autonomous on-chain pre-approval. Click <strong>"Start AI Verification"</strong> to initiate real-time optical character recognition, forgery analysis, and vector duplicate screening.
+                    </div>
+                    {/* Pre-verification Checklist */}
+                    <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '.4rem' }}>
+                      {[
+                        { label: 'Aadhaar e-KYC', done: verifyUploads.aadhaar },
+                        { label: 'Academic Marksheet', done: verifyUploads.marksheet },
+                        { label: 'Income Certificate', done: verifyUploads.income },
+                        { label: 'Bank Statement', done: verifyUploads.bank },
+                      ].map(c => (
+                        <div key={c.label} style={{
+                          display: 'flex', alignItems: 'center', gap: '.5rem',
+                          padding: '.4rem .65rem', borderRadius: '7px',
+                          background: c.done ? 'rgba(16,185,129,.06)' : 'rgba(239,68,68,.04)',
+                          border: `1px solid ${c.done ? 'rgba(16,185,129,.18)' : 'rgba(239,68,68,.12)'}`,
+                          fontSize: '.82rem'
+                        }}>
+                          <span>{c.done ? '✅' : '⬜'}</span>
+                          <span style={{ color: c.done ? '#10b981' : 'var(--text-3)' }}>{c.label}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: '.72rem', fontWeight: 600, color: c.done ? '#10b981' : '#ef4444' }}>
+                            {c.done ? 'UPLOADED' : 'PENDING'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -966,14 +1188,14 @@ Status             : CONFIRMED ON-CHAIN
       {/* APPLY MODAL */}
       {applyModal && (
         <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && setApplyModal(null)}>
-          <div className="modal-box" style={{ maxWidth: '540px' }}>
+          <div className="modal-box" style={{ maxWidth: '600px', padding: '2.4rem 2rem', borderRadius: '20px' }}>
             <button className="modal-close" onClick={() => setApplyModal(null)}>✕</button>
             <div className="modal-title">Apply — {applyModal.name}</div>
             <div className="modal-sub">Amount: ₹{applyModal.amount?.toLocaleString()} · Deadline: {applyModal.deadline}</div>
             <div className="modal-form">
-              <div className="form-row">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
-                  <label>Full Name *</label>
+                  <label>Full Legal Name *</label>
                   <input
                     type="text"
                     value={applyForm.name}
@@ -987,30 +1209,31 @@ Status             : CONFIRMED ON-CHAIN
                     type="text"
                     value={applyForm.studentId}
                     readOnly
-                    style={{ opacity: 0.7 }}
+                    style={{ opacity: 0.7, fontFamily: 'monospace' }}
                   />
                 </div>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Institution *</label>
-                  <input
-                    type="text"
-                    value={applyForm.institution}
-                    onChange={e => setApplyForm({ ...applyForm, institution: e.target.value })}
-                    placeholder="College / University"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Course / Program</label>
-                  <input
-                    type="text"
-                    value={applyForm.course}
-                    onChange={e => setApplyForm({ ...applyForm, course: e.target.value })}
-                    placeholder="e.g. B.Tech ECE"
-                  />
-                </div>
+
+              <div className="form-group">
+                <label>Enrolled Institution / College *</label>
+                <input
+                  type="text"
+                  value={applyForm.institution}
+                  onChange={e => setApplyForm({ ...applyForm, institution: e.target.value })}
+                  placeholder="Full college/university name"
+                />
               </div>
+
+              <div className="form-group">
+                <label>Course / Program Specialization</label>
+                <input
+                  type="text"
+                  value={applyForm.course}
+                  onChange={e => setApplyForm({ ...applyForm, course: e.target.value })}
+                  placeholder="e.g. B.E. Electronics & Communication Engineering"
+                />
+              </div>
+
               <div className="form-group">
                 <label>Family Annual Income (₹) *</label>
                 <input
@@ -1020,16 +1243,48 @@ Status             : CONFIRMED ON-CHAIN
                   placeholder="e.g. 420000"
                 />
               </div>
-              <div style={{ background: 'var(--bg)', border: '1px solid var(--border-2)', borderRadius: '8px', padding: '.75rem', marginBottom: '.75rem', fontSize: '.82rem', color: 'var(--text-2)' }}>
+
+              <div style={{ background: 'var(--bg)', border: '1px solid var(--border-2)', borderRadius: '10px', padding: '.85rem 1rem', fontSize: '.84rem', color: 'var(--text-2)', lineHeight: 1.5 }}>
                 <strong>Eligibility Criteria:</strong> {applyModal.criteria}
               </div>
-              <button
-                type="button"
-                className="btn-primary w-full"
-                onClick={handleSubmitApplication}
-              >
-                Submit Application →
-              </button>
+
+              <div style={{ display: 'flex', gap: '.85rem', marginTop: '.5rem' }}>
+                <button
+                  type="button"
+                  style={{
+                    flex: 2,
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '.8rem 1.4rem',
+                    fontWeight: 700,
+                    fontSize: '.92rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(79,70,229,.35)'
+                  }}
+                  onClick={handleSubmitApplication}
+                >
+                  Submit Application →
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    flex: 1,
+                    background: 'var(--card-bg, rgba(255,255,255,.05))',
+                    color: 'var(--text-2)',
+                    border: '1px solid var(--border-2)',
+                    borderRadius: '10px',
+                    padding: '.8rem 1.2rem',
+                    fontWeight: 600,
+                    fontSize: '.92rem',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setApplyModal(null)}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1038,7 +1293,7 @@ Status             : CONFIRMED ON-CHAIN
       {/* APPLICATION DETAIL MODAL */}
       {appDetail && (
         <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && setAppDetail(null)}>
-          <div className="modal-box" style={{ maxWidth: '540px' }}>
+          <div className="modal-box" style={{ maxWidth: '600px', padding: '2.4rem 2rem', borderRadius: '20px' }}>
             <button className="modal-close" onClick={() => setAppDetail(null)}>✕</button>
             <div className="modal-title">Application Dossier</div>
             <div className="modal-sub">ID: {appDetail.id} · Applied: {appDetail.date}</div>
@@ -1051,9 +1306,9 @@ Status             : CONFIRMED ON-CHAIN
                 { label: 'Institution', val: profile.institution },
                 { label: 'Remarks', val: appDetail.remarks || 'None' },
               ].map(item => (
-                <div key={item.label} style={{ padding: '.7rem', background: 'var(--bg)', borderRadius: '8px', border: '1px solid var(--border-2)' }}>
+                <div key={item.label} style={{ padding: '.75rem', background: 'var(--bg)', borderRadius: '10px', border: '1px solid var(--border-2)' }}>
                   <div style={{ fontSize: '.72rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '.25rem' }}>{item.label}</div>
-                  <div style={{ fontSize: '.85rem', fontWeight: 600 }}>{item.val}</div>
+                  <div style={{ fontSize: '.88rem', fontWeight: 600 }}>{item.val}</div>
                 </div>
               ))}
             </div>
@@ -1069,24 +1324,61 @@ Status             : CONFIRMED ON-CHAIN
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '.6rem', marginTop: '1.25rem' }}>
+            <div style={{ display: 'flex', gap: '.85rem', marginTop: '1.25rem' }}>
               <button
-                className="btn-primary"
-                style={{ flex: 1 }}
+                type="button"
+                style={{
+                  flex: 2,
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '.8rem 1.4rem',
+                  fontWeight: 700,
+                  fontSize: '.92rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 16px rgba(79,70,229,.35)'
+                }}
                 onClick={() => downloadAcknowledgementSlip(appDetail)}
               >
                 📄 Download Slip
               </button>
               {appDetail.status === 'Pending Review' && (
                 <button
-                  className="btn-sm btn-reject"
-                  style={{ flex: 1, padding: '.6rem' }}
+                  type="button"
+                  style={{
+                    flex: 1,
+                    background: 'rgba(239,68,68,.1)',
+                    color: '#ef4444',
+                    border: '1px solid rgba(239,68,68,.25)',
+                    borderRadius: '10px',
+                    padding: '.8rem 1rem',
+                    fontWeight: 600,
+                    fontSize: '.92rem',
+                    cursor: 'pointer'
+                  }}
                   onClick={() => handleWithdrawApp(appDetail.id)}
                 >
                   Withdraw App
                 </button>
               )}
-              <button className="btn-sm btn-view" onClick={() => setAppDetail(null)}>Close</button>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  background: 'var(--card-bg, rgba(255,255,255,.05))',
+                  color: 'var(--text-2)',
+                  border: '1px solid var(--border-2)',
+                  borderRadius: '10px',
+                  padding: '.8rem 1.2rem',
+                  fontWeight: 600,
+                  fontSize: '.92rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setAppDetail(null)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -1095,22 +1387,22 @@ Status             : CONFIRMED ON-CHAIN
       {/* TOKEN REDEEM MODAL */}
       {redeemModal && (
         <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && setRedeemModal(null)}>
-          <div className="modal-box" style={{ maxWidth: '500px' }}>
+          <div className="modal-box" style={{ maxWidth: '540px', padding: '2.4rem 2rem', borderRadius: '20px' }}>
             <button className="modal-close" onClick={() => setRedeemModal(null)}>✕</button>
             <div className="modal-title">Redeem Scholarship Token</div>
             <div className="modal-sub">Token: {redeemModal.id} · Amount: ₹{redeemModal.amount.toLocaleString()}</div>
 
             <div style={{ margin: '1.25rem 0' }}>
-              <label style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '.6rem' }}>
+              <label style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: '.6rem' }}>
                 Choose Redemption Channel
               </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
                 <label
                   style={{
-                    display: 'flex', alignItems: 'center', gap: '.75rem', padding: '.85rem',
+                    display: 'flex', alignItems: 'center', gap: '.85rem', padding: '.9rem',
                     background: redeemMethod === 'bank' ? 'rgba(0,232,198,.08)' : 'var(--bg)',
                     border: `1px solid ${redeemMethod === 'bank' ? 'var(--accent)' : 'var(--border-2)'}`,
-                    borderRadius: '8px', cursor: 'pointer'
+                    borderRadius: '10px', cursor: 'pointer'
                   }}
                 >
                   <input
@@ -1120,8 +1412,8 @@ Status             : CONFIRMED ON-CHAIN
                     onChange={() => setRedeemMethod('bank')}
                   />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '.88rem' }}>🏦 Direct Bank Deposit (PFMS / DBT)</div>
-                    <div style={{ fontSize: '.75rem', color: 'var(--text-3)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '.9rem' }}>🏦 Direct Bank Deposit (PFMS / DBT)</div>
+                    <div style={{ fontSize: '.78rem', color: 'var(--text-3)', marginTop: '.15rem' }}>
                       Credits to {profile.bankAcc} (IFSC: {profile.ifsc})
                     </div>
                   </div>
@@ -1129,10 +1421,10 @@ Status             : CONFIRMED ON-CHAIN
 
                 <label
                   style={{
-                    display: 'flex', alignItems: 'center', gap: '.75rem', padding: '.85rem',
+                    display: 'flex', alignItems: 'center', gap: '.85rem', padding: '.9rem',
                     background: redeemMethod === 'escrow' ? 'rgba(0,232,198,.08)' : 'var(--bg)',
                     border: `1px solid ${redeemMethod === 'escrow' ? 'var(--accent)' : 'var(--border-2)'}`,
-                    borderRadius: '8px', cursor: 'pointer'
+                    borderRadius: '10px', cursor: 'pointer'
                   }}
                 >
                   <input
@@ -1142,8 +1434,8 @@ Status             : CONFIRMED ON-CHAIN
                     onChange={() => setRedeemMethod('escrow')}
                   />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '.88rem' }}>🎓 College Tuition Escrow Account</div>
-                    <div style={{ fontSize: '.75rem', color: 'var(--text-3)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '.9rem' }}>🎓 College Tuition Escrow Account</div>
+                    <div style={{ fontSize: '.78rem', color: 'var(--text-3)', marginTop: '.15rem' }}>
                       Directly offsets semester fees at {profile.institution}
                     </div>
                   </div>
@@ -1151,94 +1443,222 @@ Status             : CONFIRMED ON-CHAIN
               </div>
             </div>
 
-            <div style={{ background: 'rgba(255,255,255,.03)', padding: '.75rem', borderRadius: '8px', fontSize: '.78rem', color: 'var(--text-3)', marginBottom: '1.2rem' }}>
+            <div style={{ background: 'rgba(255,255,255,.03)', padding: '.75rem 1rem', borderRadius: '10px', fontSize: '.78rem', color: 'var(--text-3)', marginBottom: '1.2rem', lineHeight: 1.5 }}>
               🔒 Cryptographically anchored via Algorand TestNet inner transaction. Zero intermediary deductions.
             </div>
 
-            <button
-              className="btn-primary w-full"
-              disabled={redeeming}
-              onClick={handleConfirmRedeem}
-            >
-              {redeeming ? '⏳ Processing On-Chain Redemption…' : `Confirm Redemption (₹${redeemModal.amount.toLocaleString()})`}
-            </button>
+            <div style={{ display: 'flex', gap: '.85rem' }}>
+              <button
+                type="button"
+                style={{
+                  flex: 2,
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '.8rem 1.4rem',
+                  fontWeight: 700,
+                  fontSize: '.92rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 16px rgba(79,70,229,.35)'
+                }}
+                disabled={redeeming}
+                onClick={handleConfirmRedeem}
+              >
+                {redeeming ? '⏳ Processing On-Chain Redemption…' : `Confirm Redemption (₹${redeemModal.amount.toLocaleString()})`}
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1,
+                  background: 'var(--card-bg, rgba(255,255,255,.05))',
+                  color: 'var(--text-2)',
+                  border: '1px solid var(--border-2)',
+                  borderRadius: '10px',
+                  padding: '.8rem 1.2rem',
+                  fontWeight: 600,
+                  fontSize: '.92rem',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setRedeemModal(null)}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* STUDENT PROFILE MODAL */}
+      {/* STUDENT PROFILE & CREDENTIALS MODAL */}
       {showProfileModal && (
         <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && setShowProfileModal(false)}>
-          <div className="modal-box" style={{ maxWidth: '520px' }}>
+          <div className="modal-box" style={{ maxWidth: '640px', padding: '2.4rem 2.2rem', borderRadius: '22px' }}>
             <button className="modal-close" onClick={() => setShowProfileModal(false)}>✕</button>
-            <div className="modal-title">Student Profile & Credentials</div>
-            <div className="modal-sub">Verified identity and scholarship beneficiary details</div>
 
-            <div className="modal-form" style={{ marginTop: '1rem' }}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Full Name</label>
-                  <input
-                    type="text"
-                    value={profile.name}
-                    onChange={e => setProfile({ ...profile, name: e.target.value })}
-                  />
+            {/* Profile Hero Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginBottom: '1.6rem', paddingBottom: '1.4rem', borderBottom: '1px solid var(--border-2)' }}>
+              <div style={{
+                width: '68px', height: '68px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+                color: '#fff', fontSize: '1.9rem', fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 8px 24px rgba(79,70,229,.3)', flexShrink: 0
+              }}>
+                {profile.name.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text)', margin: 0 }}>{profile.name}</h3>
+                  <span style={{ fontSize: '.75rem', fontWeight: 700, padding: '.22rem .65rem', borderRadius: '20px', background: 'rgba(16,185,129,.12)', color: '#10b981', border: '1px solid rgba(16,185,129,.25)' }}>
+                    ✔ Verified Student
+                  </span>
                 </div>
-                <div className="form-group">
-                  <label>Phone Number</label>
-                  <input
-                    type="text"
-                    value={profile.phone}
-                    onChange={e => setProfile({ ...profile, phone: e.target.value })}
-                  />
+                <div style={{ fontSize: '.84rem', color: 'var(--text-3)', marginTop: '.35rem', display: 'flex', gap: '.8rem', flexWrap: 'wrap' }}>
+                  <span>Roll: <strong style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>{profile.studentId}</strong></span>
+                  <span>•</span>
+                  <span>CGPA: <strong style={{ color: 'var(--text)' }}>{profile.cgpa}</strong></span>
+                  <span>•</span>
+                  <span>Status: <strong style={{ color: '#10b981' }}>Active Beneficiary</strong></span>
                 </div>
               </div>
+            </div>
 
-              <div className="form-row">
+            <div className="modal-form">
+              {/* Personal & Academic Details */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text-2)' }}>
+                      👤 Full Legal Name
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.name}
+                      onChange={e => setProfile({ ...profile, name: e.target.value })}
+                      placeholder="Enter legal name"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text-2)' }}>
+                      📱 Contact Number
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.phone}
+                      onChange={e => setProfile({ ...profile, phone: e.target.value })}
+                      placeholder="+91 Mobile number"
+                    />
+                  </div>
+                </div>
+
                 <div className="form-group">
-                  <label>Institution</label>
+                  <label style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text-2)' }}>
+                    🏛️ Enrolled Institution / University
+                  </label>
                   <input
                     type="text"
                     value={profile.institution}
                     onChange={e => setProfile({ ...profile, institution: e.target.value })}
+                    placeholder="Full institution name"
                   />
                 </div>
+
                 <div className="form-group">
-                  <label>Course / Branch</label>
+                  <label style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text-2)' }}>
+                    🎓 Degree Program & Specialization
+                  </label>
                   <input
                     type="text"
                     value={profile.course}
                     onChange={e => setProfile({ ...profile, course: e.target.value })}
+                    placeholder="e.g. B.E. Electronics & Communication Engineering"
                   />
                 </div>
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Aadhaar (e-KYC)</label>
-                  <input
-                    type="text"
-                    value={`XXXX-XXXX-${profile.aadhaarLast4} (Verified)`}
-                    readOnly
-                    style={{ opacity: 0.7 }}
-                  />
+              {/* Verified & Locked Blockchain Credentials Card */}
+              <div style={{
+                marginTop: '1.2rem',
+                background: 'rgba(0, 232, 198, 0.04)',
+                border: '1px solid rgba(0, 232, 198, 0.18)',
+                borderRadius: '14px',
+                padding: '1.1rem 1.25rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.85rem' }}>
+                  <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '.4rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                    🔒 Verified Blockchain & Banking Credentials
+                  </div>
+                  <span style={{ fontSize: '.72rem', color: '#10b981', fontWeight: 600, background: 'rgba(16,185,129,.1)', padding: '.2rem .5rem', borderRadius: '6px' }}>
+                    Immutable
+                  </span>
                 </div>
-                <div className="form-group">
-                  <label>Bank Account</label>
-                  <input
-                    type="text"
-                    value={profile.bankAcc}
-                    readOnly
-                    style={{ opacity: 0.7 }}
-                  />
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem', fontSize: '.84rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '.65rem .85rem', background: 'var(--bg)', borderRadius: '9px', border: '1px solid var(--border-2)' }}>
+                    <div>
+                      <div style={{ fontSize: '.72rem', color: 'var(--text-3)' }}>AADHAAR e-KYC NUMBER</div>
+                      <div style={{ fontWeight: 600, fontFamily: 'monospace', letterSpacing: '.05em' }}>XXXX-XXXX-{profile.aadhaarLast4}</div>
+                    </div>
+                    <span style={{ fontSize: '.75rem', color: '#10b981', fontWeight: 700 }}>✔ UIDAI Authenticated</span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '.65rem .85rem', background: 'var(--bg)', borderRadius: '9px', border: '1px solid var(--border-2)' }}>
+                    <div>
+                      <div style={{ fontSize: '.72rem', color: 'var(--text-3)' }}>DISBURSEMENT BANK ACCOUNT (DBT / PFMS)</div>
+                      <div style={{ fontWeight: 600 }}>{profile.bankAcc} <span style={{ fontSize: '.78rem', color: 'var(--text-3)' }}>· IFSC: {profile.ifsc}</span></div>
+                    </div>
+                    <span style={{ fontSize: '.75rem', color: '#10b981', fontWeight: 700 }}>✔ Direct Benefit Transfer Active</span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '.65rem .85rem', background: 'var(--bg)', borderRadius: '9px', border: '1px solid var(--border-2)' }}>
+                    <div>
+                      <div style={{ fontSize: '.72rem', color: 'var(--text-3)' }}>ANNUAL FAMILY INCOME</div>
+                      <div style={{ fontWeight: 600 }}>{profile.income}</div>
+                    </div>
+                    <span style={{ fontSize: '.75rem', color: '#10b981', fontWeight: 700 }}>✔ Income Certificate Cleared</span>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '.6rem', marginTop: '.75rem' }}>
-                <button className="btn-primary" style={{ flex: 1 }} onClick={handleSaveProfile}>
-                  Save Profile
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '.85rem', marginTop: '1.4rem' }}>
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  style={{
+                    flex: 2,
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '.8rem 1.4rem',
+                    fontWeight: 700,
+                    fontSize: '.92rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(79,70,229,.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '.4rem'
+                  }}
+                >
+                  💾 Save Profile Changes
                 </button>
-                <button className="btn-sm btn-view" onClick={() => setShowProfileModal(false)}>
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  style={{
+                    flex: 1,
+                    background: 'var(--card-bg, rgba(255,255,255,.05))',
+                    color: 'var(--text-2)',
+                    border: '1px solid var(--border-2)',
+                    borderRadius: '10px',
+                    padding: '.8rem 1.2rem',
+                    fontWeight: 600,
+                    fontSize: '.92rem',
+                    cursor: 'pointer'
+                  }}
+                >
                   Close
                 </button>
               </div>

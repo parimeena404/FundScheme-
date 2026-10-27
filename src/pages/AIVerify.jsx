@@ -33,7 +33,22 @@ const HOW_IT_WORKS = [
 export default function AIVerify() {
   const navigate = useNavigate()
   const [uploads, setUploads] = useState({ aadhaar:false, marksheet:false, income:false, bank:false })
-  const [formData, setFormData] = useState({ name:'', id:'', dob:'', income:'' })
+  const [uploadFiles, setUploadFiles] = useState({ aadhaar:null, marksheet:null, income:null, bank:null })
+
+  // Pre-fill from session or use realistic demo defaults
+  const citizen = (() => { try { return JSON.parse(sessionStorage.getItem('citizen_user') || 'null') } catch { return null } })()
+  const [formData, setFormData] = useState({
+    name: citizen?.name || 'Divya S. Krishnamurthy',
+    id: 'STU-2026-0478',
+    dob: '2004-07-15',
+    income: '420000',
+    institution: 'BITS Pilani',
+    course: 'B.E. Electronics & Communication',
+    cgpa: '8.92',
+    phone: citizen?.phone || '9876543210',
+    bankAcc: 'HDFC Bank · A/C XXXX-4821',
+    ifsc: 'HDFC0001244',
+  })
   const [pipelineStep, setPipelineStep] = useState(-1)
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState(false)
@@ -77,7 +92,19 @@ export default function AIVerify() {
     }, 1600)
   }
 
-  const handleUpload = (doc) => setUploads(u => ({ ...u, [doc]: true }))
+  const handleUpload = (docKey) => {
+    const fileInput = document.createElement('input')
+    fileInput.type = 'file'
+    fileInput.accept = '.pdf,.jpg,.jpeg,.png'
+    fileInput.onchange = (evt) => {
+      const file = evt.target.files?.[0]
+      if (file) {
+        setUploads(u => ({ ...u, [docKey]: true }))
+        setUploadFiles(u => ({ ...u, [docKey]: { name: file.name, size: (file.size / 1024).toFixed(0) + ' KB' } }))
+      }
+    }
+    fileInput.click()
+  }
 
   const startVerification = () => {
     if (!formData.name) { alert('Please fill in your details.'); return }
@@ -155,8 +182,8 @@ export default function AIVerify() {
               >
                 <div className="uz-icon">{uploads[d.key] ? '✅' : d.icon}</div>
                 <div className="uz-title">{d.label}</div>
-                <div className="uz-sub">{d.sub}</div>
-                <span className="uz-status">{uploads[d.key] ? '✓ Uploaded' : 'Click to upload'}</span>
+                <div className="uz-sub">{uploads[d.key] && uploadFiles[d.key] ? `📄 ${uploadFiles[d.key].name} (${uploadFiles[d.key].size})` : d.sub}</div>
+                <span className="uz-status">{uploads[d.key] ? '✓ Uploaded' : '📤 Click to browse files'}</span>
               </div>
             ))}
           </div>
@@ -251,15 +278,29 @@ export default function AIVerify() {
 
           <h2 className="ai-section-title" style={{ marginTop:'2rem' }}>Student Details</h2>
           <div className="stu-form">
-            <div className="form-group">
-              <label>Full Name (as in Aadhaar)</label>
-              <input
-                className="filter-input"
-                type="text"
-                placeholder="e.g. Priya Kumari"
-                value={formData.name}
-                onChange={e => setFormData(f => ({...f, name:e.target.value}))}
-              />
+            <div style={{ background:'rgba(16,185,129,.06)', border:'1px solid rgba(16,185,129,.18)', borderRadius:'10px', padding:'.65rem .85rem', marginBottom:'1rem', fontSize:'.8rem', color:'#10b981', display:'flex', alignItems:'center', gap:'.4rem' }}>
+              ✅ Pre-filled from your verified profile. Edit if needed.
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Full Name (as in Aadhaar)</label>
+                <input
+                  className="filter-input"
+                  type="text"
+                  placeholder="e.g. Priya Kumari"
+                  value={formData.name}
+                  onChange={e => setFormData(f => ({...f, name:e.target.value}))}
+                />
+              </div>
+              <div className="form-group">
+                <label>📱 Contact Number</label>
+                <input
+                  className="filter-input"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={e => setFormData(f => ({...f, phone:e.target.value}))}
+                />
+              </div>
             </div>
             <div className="form-row">
               <div className="form-group">
@@ -267,9 +308,9 @@ export default function AIVerify() {
                 <input
                   className="filter-input"
                   type="text"
-                  placeholder="STU-2026-XXXX"
                   value={formData.id}
-                  onChange={e => setFormData(f => ({...f, id:e.target.value}))}
+                  readOnly
+                  style={{ opacity: 0.7, fontFamily: 'monospace' }}
                 />
               </div>
               <div className="form-group">
@@ -282,15 +323,67 @@ export default function AIVerify() {
                 />
               </div>
             </div>
-            <div className="form-group">
-              <label>Family Annual Income (₹)</label>
-              <input
-                className="filter-input"
-                type="number"
-                placeholder="e.g. 250000"
-                value={formData.income}
-                onChange={e => setFormData(f => ({...f, income:e.target.value}))}
-              />
+            <div className="form-row">
+              <div className="form-group">
+                <label>🏛️ Institution / University</label>
+                <input
+                  className="filter-input"
+                  type="text"
+                  value={formData.institution}
+                  onChange={e => setFormData(f => ({...f, institution:e.target.value}))}
+                />
+              </div>
+              <div className="form-group">
+                <label>🎓 Course / Program</label>
+                <input
+                  className="filter-input"
+                  type="text"
+                  value={formData.course}
+                  onChange={e => setFormData(f => ({...f, course:e.target.value}))}
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>💰 Family Annual Income (₹)</label>
+                <input
+                  className="filter-input"
+                  type="number"
+                  value={formData.income}
+                  onChange={e => setFormData(f => ({...f, income:e.target.value}))}
+                />
+              </div>
+              <div className="form-group">
+                <label>📊 CGPA / Marks</label>
+                <input
+                  className="filter-input"
+                  type="text"
+                  value={formData.cgpa}
+                  onChange={e => setFormData(f => ({...f, cgpa:e.target.value}))}
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>🏦 Bank Account</label>
+                <input
+                  className="filter-input"
+                  type="text"
+                  value={formData.bankAcc}
+                  readOnly
+                  style={{ opacity: 0.7 }}
+                />
+              </div>
+              <div className="form-group">
+                <label>🔢 IFSC Code</label>
+                <input
+                  className="filter-input"
+                  type="text"
+                  value={formData.ifsc}
+                  readOnly
+                  style={{ opacity: 0.7, fontFamily: 'monospace' }}
+                />
+              </div>
             </div>
             <button className="btn-primary w-full" onClick={startVerification} disabled={running}>
               {running ? '⏳ Verifying…' : '🤖 Run AI Verification'}
@@ -376,7 +469,44 @@ export default function AIVerify() {
                   {txHash}
                 </div>
                 <div className="aer-actions">
-                  <button className="btn-primary" onClick={() => alert('Proof downloaded!')}>⬇ Download Proof</button>
+                  <button className="btn-primary" onClick={() => {
+                    const proofText = `======================================================================
+FUNDSCHEME — AI VERIFICATION PROOF CERTIFICATE
+======================================================================
+VERIFICATION DATE  : ${new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+STUDENT NAME       : ${formData.name}
+STUDENT ID         : ${formData.id}
+INSTITUTION        : ${formData.institution}
+COURSE             : ${formData.course}
+CGPA               : ${formData.cgpa}
+FAMILY INCOME      : ₹${Number(formData.income).toLocaleString()}
+BANK ACCOUNT       : ${formData.bankAcc}
+IFSC               : ${formData.ifsc}
+======================================================================
+VERIFICATION RESULTS:
+  Identity Match     : ✔ VERIFIED (UIDAI e-KYC)
+  Documents          : ✔ AUTHENTIC (OCR 96% confidence)
+  Forgery Detection  : ✔ CLEAR (GAN forensic scan)
+  Duplicate Check    : ✔ UNIQUE (FAISS similarity < 0.02)
+  Income Validation  : ✔ CONFIRMED (PAN/ITR cross-ref)
+
+TRUST SCORE        : ${score}/100
+BLOCKCHAIN ANCHOR  : ${txHash}
+ALGORAND BLOCK     : 31204819 (TestNet)
+======================================================================
+This certificate is cryptographically anchored on the Algorand
+public blockchain and cannot be altered or revoked.
+======================================================================`
+                    const blob = new Blob([proofText], { type: 'text/plain;charset=utf-8' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `AI_Verification_Proof_${formData.id}.txt`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                  }}>⬇ Download Proof</button>
                   <button className="btn-outline-accent" onClick={() => navigate('/user-dashboard')}>← Dashboard</button>
                 </div>
               </div>
