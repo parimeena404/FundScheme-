@@ -160,7 +160,7 @@ const SCHEMES = [
 
 const BANNER_SLIDES = [
   {
-    bg: '/poster1.jpeg',
+    bg: '/img/banner-poster.jpg',
     tag: 'Digital India Initiative',
     title: 'India’s Scholarship\nRevolution',
     sub: 'Blockchain-powered. AI-verified. Fraud-proof distribution of \u20B98,000 Crore across 2.4 million beneficiaries.',
@@ -169,7 +169,7 @@ const BANNER_SLIDES = [
     badge: '🟢 Platform Live',
   },
   {
-    bg: '/poster1.jpeg',
+    bg: '/img/banner-poster.jpg',
     tag: 'PM Fasal Bima Yojana',
     title: 'Protecting Farmers\nEvery Season',
     sub: '\u20B916,000 Crore tokenised on-chain. Crop insurance payouts verified by AI and released to 5.6 crore farmers instantly.',
@@ -178,7 +178,7 @@ const BANNER_SLIDES = [
     badge: '🟢 Active Scheme',
   },
   {
-    bg: '/poster1.jpeg',
+    bg: '/img/banner-poster.jpg',
     tag: 'Mukhyamantri Medhavi Vidyarthi Yojana',
     title: 'Meritocracy Meets\nBlockchain',
     sub: '1.2 lakh students in Madhya Pradesh receive full tuition support via cryptographic tokens — zero leakage, full transparency.',
@@ -187,7 +187,7 @@ const BANNER_SLIDES = [
     badge: '🟢 Active Scheme',
   },
   {
-    bg: '/poster1.jpeg',
+    bg: '/img/banner-poster.jpg',
     tag: 'AI Fraud Prevention',
     title: 'Zero Corruption.\nZero False Payouts.',
     sub: '7-layer AI pipeline — Aadhaar OTP, OCR forgery detection, duplicate screening — runs in under 2 seconds before any token is minted.',
@@ -325,7 +325,7 @@ export default function Landing() {
             <div className="banner-content">
               <span className="banner-tag">{s.badge}</span>
               <p className="banner-ministry">{s.tag}</p>
-              <h1 className="banner-title">{s.title.split('|').map((l,j) => <span key={j}>{l}<br/></span>)}</h1>
+              <h1 className="banner-title">{s.title.split(/[\n|]/).map((l,j) => <span key={j}>{l}<br/></span>)}</h1>
               <p className="banner-sub">{s.sub}</p>
               <div className="banner-cta">
                 {s.cta1.href
