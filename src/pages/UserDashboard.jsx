@@ -80,8 +80,20 @@ export default function UserDashboard() {
   const [verifyRunning, setVerifyRunning] = useState(false)
   const [verifyStep, setVerifyStep] = useState(-1)
   const [verifyDone, setVerifyDone] = useState(false)
-  const [myApps, setMyApps] = useState(MY_APPLICATIONS)
-  const [tokens, setTokens] = useState(MY_TOKENS)
+  const [myApps, setMyApps] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('my_apps') || localStorage.getItem('my_apps')
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return MY_APPLICATIONS
+  })
+  const [tokens, setTokens] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('my_tokens') || localStorage.getItem('my_tokens')
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return MY_TOKENS
+  })
   const [toast, setToast] = useState(null)
   const [appDetail, setAppDetail] = useState(null)
   const [redeemModal, setRedeemModal] = useState(null)
@@ -89,6 +101,24 @@ export default function UserDashboard() {
   const [redeeming, setRedeeming] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [trustScore, setTrustScore] = useState(88)
+
+  // Sync myApps and tokens across browser tabs/storage events
+  useEffect(() => {
+    const handleStorage = () => {
+      try {
+        const savedApps = sessionStorage.getItem('my_apps') || localStorage.getItem('my_apps')
+        if (savedApps) setMyApps(JSON.parse(savedApps))
+        const savedTokens = sessionStorage.getItem('my_tokens') || localStorage.getItem('my_tokens')
+        if (savedTokens) setTokens(JSON.parse(savedTokens))
+      } catch {}
+    }
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener('focus', handleStorage)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('focus', handleStorage)
+    }
+  }, [])
 
   // Topbar Notifications
   const [showNotifDropdown, setShowNotifDropdown] = useState(false)
@@ -242,15 +272,30 @@ export default function UserDashboard() {
       date: new Date().toISOString().slice(0, 10),
       amount: applyModal.amount,
       status: 'Pending Review',
-      aiScore: Math.floor(82 + Math.random() * 14),
+      aiScore: Math.floor(84 + Math.random() * 12),
       remarks: 'Submitted — queued for Algorand smart contract verification',
+      name: applyForm.name.trim(),
+      studentId: applyForm.studentId || profile.studentId || `STU-2026-${String(Date.now()).slice(-4)}`,
+      inst: applyForm.institution.trim(),
+      course: applyForm.course || profile.course || 'B.Tech / Degree',
+      income: applyForm.income ? `₹${Number(applyForm.income).toLocaleString()}` : profile.income,
+      officer: null,
+      submittedAt: new Date().toLocaleString(),
     }
     setMyApps(prev => {
       const updated = [newApp, ...prev]
-      // Persist to sessionStorage so apps survive tab switches
-      try { sessionStorage.setItem('my_apps', JSON.stringify(updated)) } catch {}
+      try {
+        sessionStorage.setItem('my_apps', JSON.stringify(updated))
+        localStorage.setItem('my_apps', JSON.stringify(updated))
+      } catch {}
       return updated
     })
+
+    // Also share with GovDashboard via localStorage
+    try {
+      const govExtra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
+      localStorage.setItem('gov_extra_apps', JSON.stringify([newApp, ...govExtra]))
+    } catch {}
 
     // Add notification for the submitted application
     setUserNotifs(prev => [{
@@ -271,7 +316,18 @@ export default function UserDashboard() {
 
   // ── Withdraw application handler ────────────────────────────────
   const handleWithdrawApp = (appId) => {
-    setMyApps(prev => prev.filter(a => a.id !== appId))
+    setMyApps(prev => {
+      const updated = prev.filter(a => a.id !== appId)
+      try {
+        sessionStorage.setItem('my_apps', JSON.stringify(updated))
+        localStorage.setItem('my_apps', JSON.stringify(updated))
+      } catch {}
+      return updated
+    })
+    try {
+      const govExtra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
+      localStorage.setItem('gov_extra_apps', JSON.stringify(govExtra.filter(a => a.id !== appId)))
+    } catch {}
     if (appDetail?.id === appId) setAppDetail(null)
     showToast(`Application ${appId} has been withdrawn.`)
   }
@@ -281,7 +337,14 @@ export default function UserDashboard() {
     if (!redeemModal) return
     setRedeeming(true)
     setTimeout(() => {
-      setTokens(prev => prev.map(t => t.id === redeemModal.id ? { ...t, status: 'redeemed' } : t))
+      setTokens(prev => {
+        const updated = prev.map(t => t.id === redeemModal.id ? { ...t, status: 'redeemed' } : t)
+        try {
+          sessionStorage.setItem('my_tokens', JSON.stringify(updated))
+          localStorage.setItem('my_tokens', JSON.stringify(updated))
+        } catch {}
+        return updated
+      })
       setRedeeming(false)
       const tokenName = redeemModal.scheme
       setRedeemModal(null)

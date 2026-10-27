@@ -12,6 +12,7 @@ import {
   REPORTS_DATA,
   BRIDGE_BATCH,
   BRIDGE_RECIPIENTS,
+  MY_TOKENS,
 } from '../data/dashboardData'
 import {
   makePeraSigner,
@@ -130,8 +131,48 @@ export default function GovDashboard() {
   const [bridgeRecipients, setBridgeRecipients] = useState(BRIDGE_RECIPIENTS)
   const [distributingBridge, setDistributingBridge] = useState(false)
 
-  // Applications state
-  const [apps, setApps] = useState(APPLICATIONS)
+  // Applications state: initialize from persistent storage with fallback
+  const [apps, setApps] = useState(() => {
+    try {
+      const saved = localStorage.getItem('gov_all_apps')
+      if (saved) return JSON.parse(saved)
+      const extra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
+      if (extra.length > 0) {
+        const ids = new Set(extra.map(a => a.id))
+        return [...extra, ...APPLICATIONS.filter(a => !ids.has(a.id))]
+      }
+    } catch {}
+    return APPLICATIONS
+  })
+
+  // Sync incoming student applications from localStorage in real-time
+  useEffect(() => {
+    const syncGovApps = () => {
+      try {
+        const extra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
+        if (extra.length > 0) {
+          setApps(prev => {
+            const ids = new Set(prev.map(a => a.id))
+            const newItems = extra.filter(a => !ids.has(a.id))
+            if (newItems.length > 0) {
+              const combined = [...newItems, ...prev]
+              localStorage.setItem('gov_all_apps', JSON.stringify(combined))
+              return combined
+            }
+            return prev
+          })
+        }
+      } catch {}
+    }
+    window.addEventListener('storage', syncGovApps)
+    window.addEventListener('focus', syncGovApps)
+    syncGovApps()
+    return () => {
+      window.removeEventListener('storage', syncGovApps)
+      window.removeEventListener('focus', syncGovApps)
+    }
+  }, [])
+
   const [flags, setFlags] = useState(AI_FLAGS)
   const [toast, setToast] = useState(null)
   const [appDetail, setAppDetail] = useState(null)
@@ -337,7 +378,57 @@ export default function GovDashboard() {
 
   // ── Approve/Reject Application Handler ─────────────────────────────
   const handleAppAction = (appId, action) => {
-    setApps(prev => prev.map(x => x.id === appId ? { ...x, status: action, officer: orgId } : x))
+    let targetApp = null
+    setApps(prev => {
+      const updated = prev.map(x => {
+        if (x.id === appId) {
+          targetApp = { ...x, status: action, officer: orgId }
+          return targetApp
+        }
+        return x
+      })
+      try { localStorage.setItem('gov_all_apps', JSON.stringify(updated)) } catch {}
+      return updated
+    })
+
+    // Sync student portal my_apps in localStorage & sessionStorage
+    try {
+      const studentApps = JSON.parse(localStorage.getItem('my_apps') || '[]')
+      const updatedStudentApps = studentApps.map(a =>
+        a.id === appId
+          ? {
+              ...a,
+              status: action,
+              remarks: action === 'Approved'
+                ? `Approved by ${orgName} (${orgId}). Algorand token generated.`
+                : action === 'AI Verified'
+                ? 'AI automated checks verified. Awaiting final officer release.'
+                : `Rejected by ${orgName} (${orgId}). Document criteria unfulfilled.`
+            }
+          : a
+      )
+      localStorage.setItem('my_apps', JSON.stringify(updatedStudentApps))
+      sessionStorage.setItem('my_apps', JSON.stringify(updatedStudentApps))
+
+      // If approved, mint/grant a token to the student
+      if (action === 'Approved' && targetApp) {
+        const existingTokens = JSON.parse(localStorage.getItem('my_tokens') || JSON.stringify(MY_TOKENS))
+        const newToken = {
+          id: `TOK-2026-${String(Date.now()).slice(-6)}-A`,
+          scheme: targetApp.scheme,
+          amount: targetApp.amount,
+          status: 'redeemable',
+          issued: new Date().toISOString().slice(0, 10),
+          expires: '2026-12-31',
+          txHash: `CKAOTMTK${Math.random().toString(36).substring(2, 8).toUpperCase()}W4ETPB5SRAXQ2`,
+          assetId: Math.floor(78800000 + Math.random() * 99999),
+        }
+        const updatedTokens = [newToken, ...existingTokens]
+        localStorage.setItem('my_tokens', JSON.stringify(updatedTokens))
+        sessionStorage.setItem('my_tokens', JSON.stringify(updatedTokens))
+      }
+    } catch {}
+
     showToast(`Application ${appId} marked as ${action}.`)
   }
 
