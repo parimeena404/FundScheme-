@@ -3309,3 +3309,141 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   line-height: 1.5;
 }
 [data-theme="dark"] .avc-disclaimer { background: rgba(255,255,255,.03); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE APP UI — NATIVE DOCK & TOUCH OPTIMIZATIONS
+═══════════════════════════════════════════════════════════════════════ */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Mobile Bottom Navigation Dock (App-Like) */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: var(--bg-2, #0d1b26);
+    background: rgba(13, 27, 38, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border-2, rgba(255,255,255,0.08));
+    z-index: 1000;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 0.25rem;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.35);
+  }
+
+  [data-theme="light"] .mobile-bottom-nav {
+    background: rgba(255, 255, 255, 0.94);
+    border-top-color: rgba(0,0,0,0.08);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+  }
+
+  .mb-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-2, #94a3b8);
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 4px 2px;
+    position: relative;
+    transition: color 0.2s, transform 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mb-item:active {
+    transform: scale(0.92);
+  }
+
+  .mb-item.active {
+    color: var(--accent, #00E8C6);
+    font-weight: 700;
+  }
+
+  .mb-item.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 25%;
+    right: 25%;
+    height: 3px;
+    background: var(--accent, #00E8C6);
+    border-radius: 0 0 3px 3px;
+    box-shadow: 0 0 8px var(--accent, #00E8C6);
+  }
+
+  .mb-icon {
+    font-size: 1.25rem;
+    line-height: 1;
+    position: relative;
+  }
+
+  .mb-badge {
+    position: absolute;
+    top: -4px;
+    right: -8px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 1px 5px;
+    line-height: 1;
+  }
+
+  .mb-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 64px;
+  }
+
+  /* Add space at the bottom of the main content so the dock doesn't obscure anything */
+  .dash-main {
+    padding-bottom: 76px !important;
+  }
+
+  /* Responsive compact header elements */
+  .dash-topbar {
+    padding: 0 0.85rem !important;
+  }
+  .topbar-left {
+    gap: 0.5rem;
+  }
+  .topbar-right {
+    gap: 0.4rem;
+  }
+
+  /* Touch-friendly touch targets */
+  button, input, select, textarea {
+    min-height: 42px;
+  }
+  .btn-sm {
+    min-height: 34px;
+  }
+
+  /* Modal responsiveness for mobile */
+  .fmodal-overlay {
+    padding: 0.5rem !important;
+    align-items: flex-end !important;
+  }
+  .fmodal-box {
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 88vh !important;
+    width: 100% !important;
+  }
+}
+

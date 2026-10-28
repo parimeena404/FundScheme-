@@ -21,9 +21,14 @@ import { useNavigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
 import {
   connectWallet,
+  connectDemoWallet,
+  connectCustomAddress,
   disconnectWallet,
   reconnectWallet,
   loadAddress,
+  getWalletMode,
+  getWalletLabel,
+  DEMO_WALLETS,
 } from '../lib/perawallet'
 import {
   getAccountInfo,
@@ -61,11 +66,23 @@ const TX_LABELS = {
 export default function WalletDashboard() {
   const navigate = useNavigate()
 
+  // Active role view: 'student' | 'gov'
+  const [activeRole,  setActiveRole]  = useState(() => {
+    try {
+      if (sessionStorage.getItem('gov_org')) return 'gov'
+    } catch {}
+    return 'student'
+  })
+
   // Connection state
-  const [address,     setAddress]     = useState(null)
-  const [isDemo,      setIsDemo]      = useState(false)   // true = view-only demo
+  const [address,     setAddress]     = useState(() => loadAddress(sessionStorage.getItem('gov_org') ? 'gov' : 'student'))
+  const [isDemo,      setIsDemo]      = useState(true)
+  const [walletMode,  setWalletMode]  = useState(() => getWalletMode(sessionStorage.getItem('gov_org') ? 'gov' : 'student'))
+  const [walletLabel, setWalletLabel] = useState(() => getWalletLabel(sessionStorage.getItem('gov_org') ? 'gov' : 'student'))
   const [connecting,  setConnecting]  = useState(false)
   const [connError,   setConnError]   = useState(null)
+  const [showCustomModal, setShowCustomModal] = useState(false)
+  const [customInput, setCustomInput]         = useState('')
 
   // Dashboard data
   const [account,     setAccount]     = useState(null)
@@ -191,40 +208,104 @@ export default function WalletDashboard() {
       .finally(() => setLoadingAsts(false))
   }, [account])
 
-  // ── On mount: try to restore existing WalletConnect session ────────────────
+  // ── On mount: try to restore or initialize active role wallet ─────────────
   useEffect(() => {
-    async function init() {
-      try {
-        const addr = await reconnectWallet()
-        if (addr) {
-          setAddress(addr)
-          setIsDemo(false)
-          fetchData(addr)
-        }
-        // No session → address stays null → connect screen shown
-      } catch { /* no prior session */ }
-    }
-    init()
-  }, [fetchData])
+    const role = activeRole
+    const addr = loadAddress(role) || (role === 'gov' ? DEMO_WALLETS.authority.address : DEMO_WALLETS.student.address)
+    setAddress(addr)
+    setWalletMode(getWalletMode(role))
+    setWalletLabel(getWalletLabel(role))
+    setIsDemo(true)
+    fetchData(addr)
 
-  // ── Connect wallet ────────────────────────────────────────────────────────
+    const onWalletUpdate = (e) => {
+      const addr = e.detail?.address
+      if (addr) {
+        setAddress(addr)
+        setWalletMode(e.detail?.mode)
+        setWalletLabel(e.detail?.label || '')
+        setIsDemo(e.detail?.mode?.startsWith('demo') || false)
+        fetchData(addr)
+      } else {
+        setAddress(null)
+        setWalletMode(null)
+        setWalletLabel('')
+        setIsDemo(false)
+      }
+    }
+    window.addEventListener('pera_wallet_updated', onWalletUpdate)
+    return () => window.removeEventListener('pera_wallet_updated', onWalletUpdate)
+  }, [fetchData, activeRole])
+
+  // ── Switch between Student and Gov Wallet View ────────────────────────────
+  const handleSwitchRole = (role) => {
+    setActiveRole(role)
+    const addr = loadAddress(role) || (role === 'gov' ? DEMO_WALLETS.authority.address : DEMO_WALLETS.student.address)
+    setAddress(addr)
+    setWalletMode(getWalletMode(role))
+    setWalletLabel(getWalletLabel(role))
+    setIsDemo(true)
+    fetchData(addr)
+  }
+
+  // ── Connect wallet via Pera ──────────────────────────────────────────────
   async function handleConnect() {
     setConnecting(true)
     setConnError(null)
     try {
       const addr = await connectWallet()
       setAddress(addr)
+      setWalletMode('pera')
+      setWalletLabel('Pera Wallet')
       setIsDemo(false)
       fetchData(addr)
     } catch (e) {
-      // USER_REJECTED_REQUEST or similar
       if (e?.message?.includes('rejected') || e?.message?.includes('cancel')) {
-        setConnError('Connection cancelled. Open Pera Wallet and try again.')
+        setConnError('Connection cancelled. Scan the QR code with Pera Wallet or click below to try a TestNet demo account.')
       } else if (e?.message?.includes('No accounts')) {
         setConnError('No accounts found. Make sure Pera Wallet is unlocked.')
       } else {
-        setConnError(e?.message ?? 'Connection failed. Is Pera Wallet installed?')
+        setConnError(e?.message ?? 'Connection failed. You can connect using the TestNet demo options below.')
       }
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  // ── Connect via Demo Wallet ───────────────────────────────────────────────
+  function handleConnectDemo(type = 'student') {
+    setConnecting(true)
+    setConnError(null)
+    try {
+      const addr = connectDemoWallet(type)
+      setAddress(addr)
+      setWalletMode(`demo_${type}`)
+      setWalletLabel(DEMO_WALLETS[type]?.label || 'TestNet Account')
+      setIsDemo(true)
+      fetchData(addr)
+    } catch (e) {
+      setConnError(e.message)
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  // ── Connect via Custom Address ────────────────────────────────────────────
+  function handleConnectCustom() {
+    if (!customInput.trim()) return
+    setConnecting(true)
+    setConnError(null)
+    try {
+      const addr = connectCustomAddress(customInput.trim())
+      setAddress(addr)
+      setWalletMode('custom')
+      setWalletLabel('Custom TestNet Address')
+      setIsDemo(false)
+      setShowCustomModal(false)
+      setCustomInput('')
+      fetchData(addr)
+    } catch (e) {
+      setConnError(e.message)
     } finally {
       setConnecting(false)
     }
@@ -269,13 +350,64 @@ export default function WalletDashboard() {
         {/* ── Page header ───────────────────────────── */}
         <div className="wd-header">
           <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', marginBottom: '.6rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '.75rem', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>Viewing Wallet As:</span>
+              <div style={{
+                display: 'inline-flex',
+                background: 'var(--card-bg, rgba(255,255,255,.06))',
+                padding: '3px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-2)',
+                gap: '3px',
+              }}>
+                <button
+                  type="button"
+                  style={{
+                    padding: '.35rem .75rem',
+                    borderRadius: '7px',
+                    border: 'none',
+                    background: activeRole === 'student' ? 'var(--accent, #00E8C6)' : 'transparent',
+                    color: activeRole === 'student' ? '#000' : 'var(--text-2)',
+                    fontWeight: activeRole === 'student' ? 700 : 500,
+                    fontSize: '.8rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '.35rem',
+                  }}
+                  onClick={() => handleSwitchRole('student')}
+                >
+                  🎓 Student Beneficiary
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    padding: '.35rem .75rem',
+                    borderRadius: '7px',
+                    border: 'none',
+                    background: activeRole === 'gov' ? 'var(--accent, #00E8C6)' : 'transparent',
+                    color: activeRole === 'gov' ? '#000' : 'var(--text-2)',
+                    fontWeight: activeRole === 'gov' ? 700 : 500,
+                    fontSize: '.8rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '.35rem',
+                  }}
+                  onClick={() => handleSwitchRole('gov')}
+                >
+                  🏛️ Government Treasury
+                </button>
+              </div>
+            </div>
+
             <h1 className="wd-title">
-              <span className="wd-title-icon">◎</span> Algorand Wallet
+              <span className="wd-title-icon">◎</span> {activeRole === 'gov' ? 'Ministry Treasury Wallet' : 'Student Beneficiary Wallet'}
             </h1>
             <p className="wd-subtitle">
-              {address
-                ? 'Connected via Pera Wallet · Algorand TestNet'
-                : 'Connect your Pera Wallet to view your TestNet account'}
+              {activeRole === 'gov'
+                ? 'Authorized Ministry Treasury Account · Scheme Escrow & ASA Minting · Algorand TestNet'
+                : 'Direct Benefit Transfer & Scholarship Token Wallet · Algorand TestNet'}
             </p>
           </div>
           <div className="wd-header-actions">
@@ -300,32 +432,70 @@ export default function WalletDashboard() {
           </div>
         )}
 
-        {/* ── Not connected: big connect screen ────────────────── */}
+        {/* ── Not connected: connect options screen ────────────── */}
         {!address && (
           <div className="wd-connect-screen">
             <div className="wd-connect-orb">◎</div>
             <h2 className="wd-connect-title">Connect your Algorand Wallet</h2>
             <p className="wd-connect-sub">
-              Use Pera Wallet on TestNet to view your ALGO balance,
-              recent transactions, and owned assets.
+              Connect via Pera Wallet (QR code / Web Wallet) or use an instant TestNet account to inspect balances, tokens, and smart contracts.
             </p>
-            <button
-              className="wd-btn wd-btn-primary wd-btn-lg"
-              onClick={handleConnect}
-              disabled={connecting}
-            >
-              {connecting
-                ? <><span className="wd-spinner" /> Waiting for Pera Wallet…</>
-                : '🔗 Connect Pera Wallet'
-              }
-            </button>
-            <div className="wd-connect-steps">
-              <div className="wd-step"><span>1</span>Open Pera Wallet on your phone</div>
-              <div className="wd-step"><span>2</span>Scan the QR code or approve the deep-link</div>
-              <div className="wd-step"><span>3</span>Your TestNet data loads automatically</div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.9rem', maxWidth: '420px', margin: '0 auto', width: '100%' }}>
+              <button
+                className="wd-btn wd-btn-primary wd-btn-lg"
+                onClick={handleConnect}
+                disabled={connecting}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                {connecting
+                  ? <><span className="wd-spinner" /> Connecting to Pera…</>
+                  : '🔗 Connect Pera Wallet (Mobile / Web)'
+                }
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', margin: '.2rem 0' }}>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border-2)' }} />
+                <span style={{ fontSize: '.75rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>OR INSTANT TESTNET CONNECT</span>
+                <div style={{ flex: 1, height: '1px', background: 'var(--border-2)' }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.6rem' }}>
+                <button
+                  type="button"
+                  className="wd-btn wd-btn-ghost"
+                  onClick={() => handleConnectDemo('student')}
+                  style={{ fontSize: '.84rem', padding: '.65rem .8rem', textAlign: 'center', justifyContent: 'center' }}
+                >
+                  🎓 Student TestNet
+                </button>
+                <button
+                  type="button"
+                  className="wd-btn wd-btn-ghost"
+                  onClick={() => handleConnectDemo('authority')}
+                  style={{ fontSize: '.84rem', padding: '.65rem .8rem', textAlign: 'center', justifyContent: 'center' }}
+                >
+                  🏛️ Gov Authority
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="wd-btn wd-btn-ghost"
+                onClick={() => setShowCustomModal(true)}
+                style={{ fontSize: '.82rem', padding: '.55rem', opacity: .8, justifyContent: 'center' }}
+              >
+                🔑 Enter Custom Algorand Address
+              </button>
+            </div>
+
+            <div className="wd-connect-steps" style={{ marginTop: '2rem' }}>
+              <div className="wd-step"><span>1</span>Scan with Pera app or select 1-click TestNet</div>
+              <div className="wd-step"><span>2</span>Approve session on your mobile phone or browser</div>
+              <div className="wd-step"><span>3</span>Live Algorand TestNet state and tokens sync automatically</div>
             </div>
             <a className="wd-faucet-link" href="https://bank.testnet.algorand.network/" target="_blank" rel="noreferrer">
-              🚰 Need TestNet ALGO? Use the faucet →
+              🚰 Need TestNet ALGO? Use the official Algorand faucet →
             </a>
           </div>
         )}
@@ -741,6 +911,48 @@ export default function WalletDashboard() {
           </a>
         </div>
       </div>
+
+      {/* ── Custom Address Input Modal ── */}
+      {showCustomModal && (
+        <div className="modal-overlay open" onClick={e => e.target === e.currentTarget && setShowCustomModal(false)}>
+          <div className="modal-box" style={{ maxWidth: '480px', padding: '2rem' }}>
+            <button className="modal-close" onClick={() => setShowCustomModal(false)}>✕</button>
+            <div style={{ fontSize: '2rem', marginBottom: '.5rem' }}>🔑</div>
+            <div className="modal-title">Connect Algorand Address</div>
+            <div className="modal-sub" style={{ marginBottom: '1.2rem' }}>
+              Enter any 58-character Algorand TestNet public address to inspect balances, assets, and transactions.
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+              <input
+                type="text"
+                placeholder="e.g. EW6GDRDYKFDMOW625MABOUBOPVBEDIFMTGZWOT3DUCQQUMVJZNXD27Q3Y4"
+                value={customInput}
+                onChange={e => setCustomInput(e.target.value)}
+                style={{ fontFamily: 'monospace', fontSize: '.84rem', padding: '.75rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '.75rem' }}>
+              <button
+                type="button"
+                className="wd-btn wd-btn-primary"
+                style={{ flex: 1, justifyContent: 'center' }}
+                onClick={handleConnectCustom}
+              >
+                Connect Address
+              </button>
+              <button
+                type="button"
+                className="wd-btn wd-btn-ghost"
+                onClick={() => setShowCustomModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

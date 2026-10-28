@@ -20,9 +20,21 @@ import {
   releasePayout as contractReleasePayout,
   getGlobalState,
   getStudentState,
+  resetOnChainDemo,
   APP_ID,
 } from '../lib/scholarship-contract'
-import { loadAddress } from '../lib/perawallet'
+import {
+  loadAddress,
+  connectWallet,
+  connectDemoWallet,
+  disconnectWallet,
+  getWalletLabel,
+} from '../lib/perawallet'
+import {
+  getSharedApplications,
+  updateApplicationStatus,
+  subscribeAppSync,
+} from '../lib/appSync'
 
 const TABS = [
   { id: 'overview',     icon: '📊', label: 'Overview' },
@@ -131,45 +143,37 @@ export default function GovDashboard() {
   const [bridgeRecipients, setBridgeRecipients] = useState(BRIDGE_RECIPIENTS)
   const [distributingBridge, setDistributingBridge] = useState(false)
 
-  // Applications state: initialize from persistent storage with fallback
-  const [apps, setApps] = useState(() => {
-    try {
-      const saved = localStorage.getItem('gov_all_apps')
-      if (saved) return JSON.parse(saved)
-      const extra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
-      if (extra.length > 0) {
-        const ids = new Set(extra.map(a => a.id))
-        return [...extra, ...APPLICATIONS.filter(a => !ids.has(a.id))]
-      }
-    } catch {}
-    return APPLICATIONS
-  })
+  // Applications state: single source of truth synced across Student & Gov portals
+  const [apps, setApps] = useState(() => getSharedApplications())
 
-  // Sync incoming student applications from localStorage in real-time
+  // Real-time synchronization across student portal & gov portal
   useEffect(() => {
-    const syncGovApps = () => {
-      try {
-        const extra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
-        if (extra.length > 0) {
-          setApps(prev => {
-            const ids = new Set(prev.map(a => a.id))
-            const newItems = extra.filter(a => !ids.has(a.id))
-            if (newItems.length > 0) {
-              const combined = [...newItems, ...prev]
-              localStorage.setItem('gov_all_apps', JSON.stringify(combined))
-              return combined
-            }
-            return prev
-          })
-        }
-      } catch {}
+    const refreshApps = () => {
+      setApps(getSharedApplications())
     }
-    window.addEventListener('storage', syncGovApps)
-    window.addEventListener('focus', syncGovApps)
-    syncGovApps()
+    const unsub = subscribeAppSync((e) => {
+      refreshApps()
+      if (e?.detail?.type === 'application_submitted') {
+        const app = e.detail.payload
+        showToast(`🔔 New application received: ${app?.name || 'Student'} (${app?.scheme || 'Scheme'})`, 'info')
+        setNotifs(prev => [
+          {
+            id: Date.now(),
+            title: '📝 New Student Application',
+            desc: `${app?.name} submitted application for "${app?.scheme}" with AI score ${app?.aiScore}/100.`,
+            time: 'Just now',
+            read: false,
+          },
+          ...prev,
+        ])
+      }
+    })
+    window.addEventListener('storage', refreshApps)
+    window.addEventListener('focus', refreshApps)
     return () => {
-      window.removeEventListener('storage', syncGovApps)
-      window.removeEventListener('focus', syncGovApps)
+      unsub()
+      window.removeEventListener('storage', refreshApps)
+      window.removeEventListener('focus', refreshApps)
     }
   }, [])
 
@@ -196,6 +200,7 @@ export default function GovDashboard() {
   }
 
   // ── Contract state ──────────────────────────────────
+  const [walletAddr,      setWalletAddr]      = useState(() => loadAddress('authority'))
   const [contractGlobal,  setContractGlobal]  = useState(null)
   const [contractLoading, setContractLoading] = useState(false)
   const [contractError,   setContractError]   = useState(null)
@@ -203,6 +208,16 @@ export default function GovDashboard() {
   const [contractAction,  setContractAction]  = useState(null)
   const [studentTarget,   setStudentTarget]   = useState('')
   const [studentState,    setStudentState]    = useState(null)
+
+  useEffect(() => {
+    const handleWalletChange = (e) => {
+      if (e.detail?.role && e.detail.role !== 'gov' && e.detail.role !== 'authority') return
+      const a = e.detail?.address || loadAddress('authority')
+      setWalletAddr(a)
+    }
+    window.addEventListener('pera_wallet_updated', handleWalletChange)
+    return () => window.removeEventListener('pera_wallet_updated', handleWalletChange)
+  }, [])
 
   const loadGlobal = useCallback(async () => {
     setContractLoading(true)
@@ -232,8 +247,12 @@ export default function GovDashboard() {
   }
 
   const runContractOp = async (label, fn) => {
-    const authAddr = loadAddress()
-    if (!authAddr) { setContractError('Connect your wallet (◎ Wallet) first.'); return }
+    let authAddr = walletAddr || loadAddress()
+    if (!authAddr) {
+      authAddr = connectDemoWallet('authority')
+      setWalletAddr(authAddr)
+      showToast('🏛️ Connected Treasury Authority Account for on-chain signing.')
+    }
     setContractAction(label)
     setContractError(null)
     setContractTx(null)
@@ -241,6 +260,7 @@ export default function GovDashboard() {
       const signer = makePeraSigner(authAddr)
       const { txID } = await fn(authAddr, signer)
       setContractTx(txID)
+      showToast(`✅ ${label} confirmed on Algorand TestNet!`)
       await loadGlobal()
       if (studentTarget) {
         const s = await getStudentState(studentTarget.trim())
@@ -259,12 +279,14 @@ export default function GovDashboard() {
 
   const navigate = useNavigate()
 
-  // ── Session: read logged-in gov org ────────────────────────────────
+  // ── Session: read logged-in gov org with default fallback ────────
   const govOrg = (() => {
-    try { return JSON.parse(sessionStorage.getItem('gov_org') || 'null') }
-    catch { return null }
+    try {
+      const stored = sessionStorage.getItem('gov_org')
+      if (stored) return JSON.parse(stored)
+    } catch {}
+    return { orgName: 'Ministry of Education', scheme: 'NSP Central Merit Scholarship', orgId: 'OFF-GOV-01' }
   })()
-  useEffect(() => { if (!govOrg) navigate('/') }, [])
   const orgName   = govOrg?.orgName  || 'Ministry Officer'
   const orgScheme = govOrg?.scheme   || ''
   const orgId     = govOrg?.orgId    || 'OFF-GOV-01'
@@ -378,58 +400,10 @@ export default function GovDashboard() {
 
   // ── Approve/Reject Application Handler ─────────────────────────────
   const handleAppAction = (appId, action) => {
-    let targetApp = null
-    setApps(prev => {
-      const updated = prev.map(x => {
-        if (x.id === appId) {
-          targetApp = { ...x, status: action, officer: orgId }
-          return targetApp
-        }
-        return x
-      })
-      try { localStorage.setItem('gov_all_apps', JSON.stringify(updated)) } catch {}
-      return updated
-    })
-
-    // Sync student portal my_apps in localStorage & sessionStorage
-    try {
-      const studentApps = JSON.parse(localStorage.getItem('my_apps') || '[]')
-      const updatedStudentApps = studentApps.map(a =>
-        a.id === appId
-          ? {
-              ...a,
-              status: action,
-              remarks: action === 'Approved'
-                ? `Approved by ${orgName} (${orgId}). Algorand token generated.`
-                : action === 'AI Verified'
-                ? 'AI automated checks verified. Awaiting final officer release.'
-                : `Rejected by ${orgName} (${orgId}). Document criteria unfulfilled.`
-            }
-          : a
-      )
-      localStorage.setItem('my_apps', JSON.stringify(updatedStudentApps))
-      sessionStorage.setItem('my_apps', JSON.stringify(updatedStudentApps))
-
-      // If approved, mint/grant a token to the student
-      if (action === 'Approved' && targetApp) {
-        const existingTokens = JSON.parse(localStorage.getItem('my_tokens') || JSON.stringify(MY_TOKENS))
-        const newToken = {
-          id: `TOK-2026-${String(Date.now()).slice(-6)}-A`,
-          scheme: targetApp.scheme,
-          amount: targetApp.amount,
-          status: 'redeemable',
-          issued: new Date().toISOString().slice(0, 10),
-          expires: '2026-12-31',
-          txHash: `CKAOTMTK${Math.random().toString(36).substring(2, 8).toUpperCase()}W4ETPB5SRAXQ2`,
-          assetId: Math.floor(78800000 + Math.random() * 99999),
-        }
-        const updatedTokens = [newToken, ...existingTokens]
-        localStorage.setItem('my_tokens', JSON.stringify(updatedTokens))
-        sessionStorage.setItem('my_tokens', JSON.stringify(updatedTokens))
-      }
-    } catch {}
-
-    showToast(`Application ${appId} marked as ${action}.`)
+    updateApplicationStatus(appId, action, { orgId, orgName })
+    const refreshed = getSharedApplications()
+    setApps(refreshed)
+    showToast(`✅ Application ${appId} marked as ${action} by ${orgName}!`)
   }
 
   // ── CSV Export ─────────────────────────────────────────────────────
@@ -813,6 +787,97 @@ Algorand Anchor TXID: V7KQMN3PXRWSTF4DHJBL8CGAZE2YNI6OULM5Q3PXRWSTF4DHJBL
               </div>
             )}
 
+            {/* Wallet Connection Bar for Authority */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(79,70,229,.12), rgba(6,182,212,.08))',
+              border: '1px solid rgba(129,140,248,.3)',
+              borderRadius: '14px',
+              padding: '1.2rem 1.4rem',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem',
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+                  <span>◎</span> {walletAddr ? `Officer Authority Wallet: ${walletAddr.slice(0, 8)}…${walletAddr.slice(-6)}` : 'Algorand Treasury Authority Wallet'}
+                  {walletAddr && (
+                    <span style={{ fontSize: '.72rem', background: 'rgba(16,185,129,.15)', color: '#10b981', padding: '.2rem .55rem', borderRadius: '6px', fontWeight: 700 }}>
+                      ✔ Connected ({getWalletLabel() || 'Authority'})
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '.8rem', color: 'var(--text-2)', marginTop: '.25rem' }}>
+                  {walletAddr
+                    ? `Authorized to execute milestone approvals and payout releases on App ID ${APP_ID}`
+                    : 'Connect via Pera Wallet or select 1-click Treasury Authority Wallet (App Creator) to manage disbursements.'}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
+                {!walletAddr ? (
+                  <>
+                    <button
+                      className="btn-primary"
+                      style={{ fontSize: '.84rem', padding: '.55rem 1rem' }}
+                      onClick={async () => {
+                        try {
+                          const a = await connectWallet()
+                          setWalletAddr(a)
+                          showToast('🔗 Connected via Pera Wallet!')
+                        } catch (e) {
+                          showToast(e.message, 'error')
+                        }
+                      }}
+                    >
+                      🔗 Connect Pera Wallet
+                    </button>
+                    <button
+                      className="btn-sm btn-view"
+                      style={{ fontSize: '.84rem', padding: '.55rem .9rem', background: 'rgba(79,70,229,.15)', color: 'var(--accent)', border: '1px solid rgba(129,140,248,.3)' }}
+                      onClick={() => {
+                        const a = connectDemoWallet('authority')
+                        setWalletAddr(a)
+                        showToast('🏛️ Connected Treasury Authority Wallet!')
+                      }}
+                    >
+                      🏛️ 1-Click Treasury Wallet
+                    </button>
+                    <button
+                      className="btn-sm btn-view"
+                      style={{ fontSize: '.84rem', padding: '.55rem .8rem' }}
+                      onClick={() => navigate('/wallet')}
+                    >
+                      Full Wallet Hub →
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="btn-sm btn-view"
+                      style={{ fontSize: '.84rem' }}
+                      onClick={() => navigate('/wallet')}
+                    >
+                      Open Wallet Hub ↗
+                    </button>
+                    <button
+                      className="btn-sm btn-reject"
+                      style={{ fontSize: '.84rem' }}
+                      onClick={() => {
+                        disconnectWallet()
+                        setWalletAddr(null)
+                        showToast('Authority wallet disconnected.')
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
             {/* Global State Card */}
             <div className="table-card" style={{ padding: '1.5rem', marginBottom: '1.25rem' }}>
               <h3 style={{ marginBottom: '1rem', fontSize: '1rem' }}>📊 Contract Global State</h3>
@@ -892,19 +957,49 @@ Algorand Anchor TXID: V7KQMN3PXRWSTF4DHJBL8CGAZE2YNI6OULM5Q3PXRWSTF4DHJBL
               {/* Form 2: Student Milestone / Payout Actions */}
               <div className="tokenize-preview">
                 <h3>Student Authority Actions</h3>
-                <div className="form-group" style={{ marginBottom: '.75rem' }}>
-                  <label>Student Algorand Wallet Address</label>
+                <div className="form-group" style={{ marginBottom: '.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.35rem' }}>
+                    <label style={{ margin: 0 }}>Student Algorand Wallet Address</label>
+                    <button
+                      type="button"
+                      className="copy-btn"
+                      style={{ fontSize: '.72rem', padding: '.2rem .5rem' }}
+                      onClick={() => {
+                        const demoAddr = 'EW6GDRDYKFDMOW625MABOUBOPVBEDIFMTGZWOT3DUCQQUMVJZNXD27Q3Y4'
+                        setStudentTarget(demoAddr)
+                        getStudentState(demoAddr).then(s => setStudentState(s))
+                        showToast('🎯 Filled Demo Student Wallet (Divya).')
+                      }}
+                    >
+                      🎯 Use Demo Student
+                    </button>
+                  </div>
                   <input
                     className="filter-input"
                     style={{ fontFamily: 'monospace', fontSize: '.82rem' }}
-                    placeholder="ALGO TestNet address…"
+                    placeholder="Enter or select student ALGO address…"
                     value={studentTarget}
                     onChange={e => setStudentTarget(e.target.value)}
                   />
                 </div>
-                <button className="btn-sm btn-view" style={{ marginBottom: '.75rem' }} onClick={lookupStudent}>
-                  🔍 Look Up Student State
-                </button>
+                <div style={{ display: 'flex', gap: '.5rem', marginBottom: '.75rem', flexWrap: 'wrap' }}>
+                  <button className="btn-sm btn-view" onClick={lookupStudent}>
+                    🔍 Look Up Student State
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    style={{ fontSize: '.76rem', background: 'rgba(239,68,68,.12)', color: '#f87171', border: '1px solid rgba(239,68,68,.25)' }}
+                    onClick={() => {
+                      const target = studentTarget.trim() || 'EW6GDRDYKFDMOW625MABOUBOPVBEDIFMTGZWOT3DUCQQUMVJZNXD27Q3Y4'
+                      resetOnChainDemo(target)
+                      setStudentState(null)
+                      showToast(`🔄 Reset on-chain demo progress for student.`)
+                    }}
+                  >
+                    🔄 Reset Progress
+                  </button>
+                </div>
 
                 {studentState && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '.35rem', marginBottom: '1rem' }}>
@@ -1073,7 +1168,10 @@ Algorand Anchor TXID: V7KQMN3PXRWSTF4DHJBL8CGAZE2YNI6OULM5Q3PXRWSTF4DHJBL
                 <div className="app-scheme">{a.scheme}</div>
                 <div className="app-amount">₹{a.amount.toLocaleString()}</div>
                 <StatusBadge status={a.status} />
-                <div style={{ fontSize: '.78rem', color: 'var(--text-3)' }}>{a.date}</div>
+                <div style={{ fontSize: '.78rem', color: 'var(--text-3)', display: 'flex', flexDirection: 'column' }}>
+                  <span>{a.date}</span>
+                  {a.time && <span style={{ fontSize: '.72rem', color: 'var(--text-3)', opacity: 0.85 }}>{a.time}</span>}
+                </div>
                 <div style={{ fontSize: '.78rem', color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: '.25rem' }}>
                   🛡️ {a.aiScore}/100
                 </div>
@@ -1395,7 +1493,7 @@ Algorand Anchor TXID: V7KQMN3PXRWSTF4DHJBL8CGAZE2YNI6OULM5Q3PXRWSTF4DHJBL
           <div className="modal-box" style={{ maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto' }}>
             <button className="modal-close" onClick={() => setAppDetail(null)}>✕</button>
             <div className="modal-title">Application Verification File</div>
-            <div className="modal-sub">File #{appDetail.id} · Submitted {appDetail.date}</div>
+            <div className="modal-sub">File #{appDetail.id} · Submitted {appDetail.submittedAt || `${appDetail.date}${appDetail.time ? ` · ${appDetail.time}` : ''}`}</div>
 
             {/* Applicant Summary Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem', marginTop: '1rem' }}>
@@ -1537,6 +1635,27 @@ Algorand Anchor TXID: V7KQMN3PXRWSTF4DHJBL8CGAZE2YNI6OULM5Q3PXRWSTF4DHJBL
           </div>
         </div>
       )}
+
+      {/* MOBILE APP BOTTOM NAVIGATION DOCK */}
+      <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            className={`mb-item${tab === t.id ? ' active' : ''}`}
+            onClick={() => {
+              setTab(t.id)
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+          >
+            <span className="mb-icon">
+              {t.icon}
+              {t.badge ? <span className="mb-badge">{t.badge}</span> : null}
+            </span>
+            <span className="mb-label">{t.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

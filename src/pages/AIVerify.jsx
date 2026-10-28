@@ -1,39 +1,39 @@
-import { useState, useEffect, useRef } from 'react'
+0000000000000import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
 
 const PIPELINE = [
-  { icon:'📤', label:'Upload Hash & Metadata',     desc:'Generating unique document fingerprints' },
-  { icon:'🔍', label:'OCR Text Extraction',         desc:'Parsing fields from uploaded documents' },
-  { icon:'🪪', label:'Identity Cross-Reference',    desc:'Matching against UIDAI & state databases' },
-  { icon:'🖼️', label:'Forgery Detection',           desc:'ML pixel-level image integrity scan' },
-  { icon:'📋', label:'Duplicate Check',             desc:'Vector DB similarity search across all applications' },
-  { icon:'💰', label:'Income Validation',           desc:'Cross-referencing PAN / ITR data' },
-  { icon:'⛓️', label:'On-Chain Anchoring',          desc:'Writing verification proof to blockchain' },
+  { icon: '📤', label: 'Upload Hash & Metadata', desc: 'Generating unique document fingerprints' },
+  { icon: '🔍', label: 'OCR Text Extraction', desc: 'Parsing fields from uploaded documents' },
+  { icon: '🪪', label: 'Identity Cross-Reference', desc: 'Matching against UIDAI & state databases' },
+  { icon: '🖼️', label: 'Forgery Detection', desc: 'ML pixel-level image integrity scan' },
+  { icon: '📋', label: 'Duplicate Check', desc: 'Vector DB similarity search across all applications' },
+  { icon: '💰', label: 'Income Validation', desc: 'Cross-referencing PAN / ITR data' },
+  { icon: '⛓️', label: 'On-Chain Anchoring', desc: 'Writing verification proof to blockchain' },
 ]
 
 const FRAUD_PATTERNS = [
-  { icon:'👥', title:'Identity Cloning', desc:'Same Aadhaar linked to multiple student profiles — caught by vector fingerprint comparison.', risk:'high' },
-  { icon:'📄', title:'Document Forgery', desc:'Pixel metadata inconsistencies in income certificates — detected by GAN-based forensics model.', risk:'high' },
-  { icon:'♻️', title:'Duplicate Application', desc:'Same student applies to multiple overlapping schemes — caught by semantic similarity search.', risk:'med' },
-  { icon:'💳', title:'Third-Party Bank', desc:'Bank account PAN mismatch with student identity — caught by cross-reference validator.', risk:'high' },
-  { icon:'📊', title:'Income Manipulation', desc:'Stated income inconsistent with property/ITR data — flagged by income anomaly detector.', risk:'med' },
-  { icon:'♀️', title:'Category Fraud', desc:'Gender or caste mismatch between application and institutional records.', risk:'low' },
+  { icon: '👥', title: 'Identity Cloning', desc: 'Same Aadhaar linked to multiple student profiles — caught by vector fingerprint comparison.', risk: 'high' },
+  { icon: '📄', title: 'Document Forgery', desc: 'Pixel metadata inconsistencies in income certificates — detected by GAN-based forensics model.', risk: 'high' },
+  { icon: '♻️', title: 'Duplicate Application', desc: 'Same student applies to multiple overlapping schemes — caught by semantic similarity search.', risk: 'med' },
+  { icon: '💳', title: 'Third-Party Bank', desc: 'Bank account PAN mismatch with student identity — caught by cross-reference validator.', risk: 'high' },
+  { icon: '📊', title: 'Income Manipulation', desc: 'Stated income inconsistent with property/ITR data — flagged by income anomaly detector.', risk: 'med' },
+  { icon: '♀️', title: 'Category Fraud', desc: 'Gender or caste mismatch between application and institutional records.', risk: 'low' },
 ]
 
 const HOW_IT_WORKS = [
-  { icon:'📄', title:'Document Upload', desc:'Submit Aadhaar, marksheet, income certificate, and bank statement through encrypted upload zones.' },
-  { icon:'🔍', title:'OCR Extraction', desc:'Computer vision extracts text, numbers, and metadata from each document with 99.2% accuracy.' },
-  { icon:'🪪', title:'Identity Fusion', desc:'Name, DOB, address, and biometric data fused and cross-referenced against 3 government databases.' },
-  { icon:'🤖', title:'ML Forgery Scan', desc:'Generative adversarial network detects pixel-level manipulations invisible to the human eye.' },
-  { icon:'📋', title:'Duplicate Detection', desc:'FAISS vector similarity search across 2.4M student records to catch re-submissions.' },
-  { icon:'⛓️', title:'Blockchain Anchoring', desc:'SHA-256 hash of the verification result written permanently to the public ledger.' },
+  { icon: '📄', title: 'Document Upload', desc: 'Submit Aadhaar, marksheet, income certificate, and bank statement through encrypted upload zones.' },
+  { icon: '🔍', title: 'OCR Extraction', desc: 'Computer vision extracts text, numbers, and metadata from each document with 99.2% accuracy.' },
+  { icon: '🪪', title: 'Identity Fusion', desc: 'Name, DOB, address, and biometric data fused and cross-referenced against 3 government databases.' },
+  { icon: '🤖', title: 'ML Forgery Scan', desc: 'Generative adversarial network detects pixel-level manipulations invisible to the human eye.' },
+  { icon: '📋', title: 'Duplicate Detection', desc: 'FAISS vector similarity search across 2.4M student records to catch re-submissions.' },
+  { icon: '⛓️', title: 'Blockchain Anchoring', desc: 'SHA-256 hash of the verification result written permanently to the public ledger.' },
 ]
 
 export default function AIVerify() {
   const navigate = useNavigate()
-  const [uploads, setUploads] = useState({ aadhaar:false, marksheet:false, income:false, bank:false })
-  const [uploadFiles, setUploadFiles] = useState({ aadhaar:null, marksheet:null, income:null, bank:null })
+  const [uploads, setUploads] = useState({ aadhaar: false, marksheet: false, income: false, bank: false })
+  const [uploadFiles, setUploadFiles] = useState({ aadhaar: null, marksheet: null, income: null, bank: null })
 
   // Pre-fill from session or use realistic demo defaults
   const citizen = (() => { try { return JSON.parse(sessionStorage.getItem('citizen_user') || 'null') } catch { return null } })()
@@ -53,20 +53,20 @@ export default function AIVerify() {
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState(false)
   const [score, setScore] = useState(0)
-  const [txHash] = useState(() => '0x' + Array.from({length:40}, () => '0123456789ABCDEF'[Math.floor(Math.random()*16)]).join(''))
+  const [txHash] = useState(() => '0x' + Array.from({ length: 40 }, () => '0123456789ABCDEF'[Math.floor(Math.random() * 16)]).join(''))
   const ringRef = useRef(null)
 
   // ── Aadhaar Verification State ──
   const [aadhaarNum, setAadhaarNum] = useState('')
   const [otpVal, setOtpVal] = useState('')
   const [aadhaarStep, setAadhaarStep] = useState('idle')   // idle | sending | otp | verifying | success | fail
-  const [aadhaarMsg, setAadhaarMsg]   = useState('')
-  const [otpTimer, setOtpTimer]       = useState(0)
+  const [aadhaarMsg, setAadhaarMsg] = useState('')
+  const [otpTimer, setOtpTimer] = useState(0)
 
-  const formatAadhaar = (v) => v.replace(/\D/g,'').slice(0,12).replace(/(\d{4})(\d{4})?(\d{4})?/, (_,a,b,c) => [a,b,c].filter(Boolean).join(' '))
+  const formatAadhaar = (v) => v.replace(/\D/g, '').slice(0, 12).replace(/(\d{4})(\d{4})?(\d{4})?/, (_, a, b, c) => [a, b, c].filter(Boolean).join(' '))
 
   const sendOTP = () => {
-    const digits = aadhaarNum.replace(/\s/g,'')
+    const digits = aadhaarNum.replace(/\s/g, '')
     if (digits.length !== 12) { setAadhaarMsg('Please enter a valid 12-digit Aadhaar number.'); return }
     setAadhaarStep('sending'); setAadhaarMsg('')
     setTimeout(() => {
@@ -139,11 +139,11 @@ export default function AIVerify() {
       {/* NAVBAR */}
       <nav className="navbar">
         <div className="nav-inner">
-          <div className="nav-brand" style={{ cursor:'pointer' }} onClick={() => navigate('/')}>
+          <div className="nav-brand" style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
             <span className="brand-icon">⚡</span>ExpressScheme
           </div>
           <div className="nav-links">
-            <span style={{ cursor:'pointer', color:'var(--text-2)' }} onClick={() => navigate('/user-dashboard')}>← Back to Dashboard</span>
+            <span style={{ cursor: 'pointer', color: 'var(--text-2)' }} onClick={() => navigate('/user-dashboard')}>← Back to Dashboard</span>
           </div>
           <ThemeToggle />
         </div>
@@ -153,10 +153,10 @@ export default function AIVerify() {
       <div className="ai-hero">
         <div className="ai-hero-inner">
           <div className="hero-badge"><span className="badge-dot"></span>AI Verification Engine v3.2</div>
-          <h1 className="hero-title" style={{ fontSize:'2.4rem' }}>
+          <h1 className="hero-title" style={{ fontSize: '2.4rem' }}>
             7-Layer <span className="gradient-text">AI Identity Verification</span>
           </h1>
-          <p style={{ color:'var(--text-2)', maxWidth:'560px', margin:'0 auto' }}>
+          <p style={{ color: 'var(--text-2)', maxWidth: '560px', margin: '0 auto' }}>
             Upload your documents, run the AI pipeline, and receive an on-chain verified proof
             of eligibility — all in under 60 seconds.
           </p>
@@ -170,10 +170,10 @@ export default function AIVerify() {
           <h2 className="ai-section-title">Upload Documents</h2>
           <div className="upload-grid">
             {[
-              { key:'aadhaar',   icon:'🪪', label:'Aadhaar Card',        sub:'Front & back' },
-              { key:'marksheet', icon:'📋', label:'Marksheet / Certificate', sub:'Latest academic' },
-              { key:'income',    icon:'💰', label:'Income Certificate',  sub:'Family annual income' },
-              { key:'bank',      icon:'🏦', label:'Bank Statement',      sub:'Last 3 months' },
+              { key: 'aadhaar', icon: '🪪', label: 'Aadhaar Card', sub: 'Front & back' },
+              { key: 'marksheet', icon: '📋', label: 'Marksheet / Certificate', sub: 'Latest academic' },
+              { key: 'income', icon: '💰', label: 'Income Certificate', sub: 'Family annual income' },
+              { key: 'bank', icon: '🏦', label: 'Bank Statement', sub: 'Last 3 months' },
             ].map(d => (
               <div
                 key={d.key}
@@ -197,12 +197,12 @@ export default function AIVerify() {
                 <div className="avc-sub">Powered by UIDAI API &mdash; OTP on registered mobile</div>
               </div>
               {aadhaarStep === 'success' && <span className="avc-badge success">✓ Verified</span>}
-              {aadhaarStep === 'fail'    && <span className="avc-badge fail">✗ Failed</span>}
+              {aadhaarStep === 'fail' && <span className="avc-badge fail">✗ Failed</span>}
             </div>
 
             {aadhaarStep !== 'success' && (
               <>
-                <div className="form-group" style={{ marginTop:'1rem' }}>
+                <div className="form-group" style={{ marginTop: '1rem' }}>
                   <label>Aadhaar Number</label>
                   <input
                     className="filter-input aadhaar-input"
@@ -212,42 +212,42 @@ export default function AIVerify() {
                     maxLength={14}
                     value={aadhaarNum}
                     onChange={e => setAadhaarNum(formatAadhaar(e.target.value))}
-                    disabled={aadhaarStep==='otp'||aadhaarStep==='verifying'||aadhaarStep==='sending'}
+                    disabled={aadhaarStep === 'otp' || aadhaarStep === 'verifying' || aadhaarStep === 'sending'}
                   />
                 </div>
 
-                {(aadhaarStep==='idle'||aadhaarStep==='sending') && (
+                {(aadhaarStep === 'idle' || aadhaarStep === 'sending') && (
                   <button
                     className="btn-primary w-full"
-                    style={{ marginTop:'.75rem' }}
+                    style={{ marginTop: '.75rem' }}
                     onClick={sendOTP}
-                    disabled={aadhaarStep==='sending'}
+                    disabled={aadhaarStep === 'sending'}
                   >
-                    {aadhaarStep==='sending' ? '⏳ Sending OTP…' : '📱 Send OTP to Registered Mobile'}
+                    {aadhaarStep === 'sending' ? '⏳ Sending OTP…' : '📱 Send OTP to Registered Mobile'}
                   </button>
                 )}
 
-                {(aadhaarStep==='otp'||aadhaarStep==='verifying') && (
+                {(aadhaarStep === 'otp' || aadhaarStep === 'verifying') && (
                   <>
-                    <div className="form-group" style={{ marginTop:'.75rem' }}>
-                      <label>Enter OTP <span style={{ color:'var(--text-3)', fontWeight:400 }}>({otpTimer > 0 ? `Resend in ${otpTimer}s` : <button className="avc-resend" onClick={() => { setAadhaarStep('idle'); setOtpVal('') }}>Resend</button>})</span></label>
+                    <div className="form-group" style={{ marginTop: '.75rem' }}>
+                      <label>Enter OTP <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>({otpTimer > 0 ? `Resend in ${otpTimer}s` : <button className="avc-resend" onClick={() => { setAadhaarStep('idle'); setOtpVal('') }}>Resend</button>})</span></label>
                       <input
                         className="filter-input"
                         type="tel"
                         placeholder="6-digit OTP"
                         maxLength={6}
                         value={otpVal}
-                        onChange={e => setOtpVal(e.target.value.replace(/\D/g,'').slice(0,6))}
-                        disabled={aadhaarStep==='verifying'}
+                        onChange={e => setOtpVal(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        disabled={aadhaarStep === 'verifying'}
                       />
                     </div>
                     <button
                       className="btn-primary w-full"
-                      style={{ marginTop:'.75rem', background:'#16A34A' }}
+                      style={{ marginTop: '.75rem', background: '#16A34A' }}
                       onClick={verifyOTP}
-                      disabled={aadhaarStep==='verifying'||otpVal.length<6}
+                      disabled={aadhaarStep === 'verifying' || otpVal.length < 6}
                     >
-                      {aadhaarStep==='verifying' ? '⏳ Verifying…' : '✔️ Verify Aadhaar'}
+                      {aadhaarStep === 'verifying' ? '⏳ Verifying…' : '✔️ Verify Aadhaar'}
                     </button>
                     <p className="avc-demo-hint">Demo: Enter any 6-digit OTP to verify</p>
                   </>
@@ -259,14 +259,14 @@ export default function AIVerify() {
               <div className="avc-success-row">
                 <div className="avc-verified-info">
                   <div>👤 <strong>Name:</strong> {formData.name || 'As per Aadhaar'}</div>
-                  <div>📅 <strong>Aadhaar:</strong> XXXX XXXX {aadhaarNum.replace(/\s/g,'').slice(-4)}</div>
-                  <div>📍 <strong>eKYC Status:</strong> <span style={{ color:'#16A34A' }}>Completed</span></div>
+                  <div>📅 <strong>Aadhaar:</strong> XXXX XXXX {aadhaarNum.replace(/\s/g, '').slice(-4)}</div>
+                  <div>📍 <strong>eKYC Status:</strong> <span style={{ color: '#16A34A' }}>Completed</span></div>
                 </div>
               </div>
             )}
 
             {aadhaarMsg && (
-              <p className={`avc-msg ${aadhaarStep==='success'?'ok':aadhaarStep==='fail'?'err':'info'}`}>
+              <p className={`avc-msg ${aadhaarStep === 'success' ? 'ok' : aadhaarStep === 'fail' ? 'err' : 'info'}`}>
                 {aadhaarMsg}
               </p>
             )}
@@ -276,9 +276,9 @@ export default function AIVerify() {
             </p>
           </div>
 
-          <h2 className="ai-section-title" style={{ marginTop:'2rem' }}>Student Details</h2>
+          <h2 className="ai-section-title" style={{ marginTop: '2rem' }}>Student Details</h2>
           <div className="stu-form">
-            <div style={{ background:'rgba(16,185,129,.06)', border:'1px solid rgba(16,185,129,.18)', borderRadius:'10px', padding:'.65rem .85rem', marginBottom:'1rem', fontSize:'.8rem', color:'#10b981', display:'flex', alignItems:'center', gap:'.4rem' }}>
+            <div style={{ background: 'rgba(16,185,129,.06)', border: '1px solid rgba(16,185,129,.18)', borderRadius: '10px', padding: '.65rem .85rem', marginBottom: '1rem', fontSize: '.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '.4rem' }}>
               ✅ Pre-filled from your verified profile. Edit if needed.
             </div>
             <div className="form-row">
@@ -289,7 +289,7 @@ export default function AIVerify() {
                   type="text"
                   placeholder="e.g. Priya Kumari"
                   value={formData.name}
-                  onChange={e => setFormData(f => ({...f, name:e.target.value}))}
+                  onChange={e => setFormData(f => ({ ...f, name: e.target.value }))}
                 />
               </div>
               <div className="form-group">
@@ -298,7 +298,7 @@ export default function AIVerify() {
                   className="filter-input"
                   type="tel"
                   value={formData.phone}
-                  onChange={e => setFormData(f => ({...f, phone:e.target.value}))}
+                  onChange={e => setFormData(f => ({ ...f, phone: e.target.value }))}
                 />
               </div>
             </div>
@@ -319,7 +319,7 @@ export default function AIVerify() {
                   className="filter-input"
                   type="date"
                   value={formData.dob}
-                  onChange={e => setFormData(f => ({...f, dob:e.target.value}))}
+                  onChange={e => setFormData(f => ({ ...f, dob: e.target.value }))}
                 />
               </div>
             </div>
@@ -330,7 +330,7 @@ export default function AIVerify() {
                   className="filter-input"
                   type="text"
                   value={formData.institution}
-                  onChange={e => setFormData(f => ({...f, institution:e.target.value}))}
+                  onChange={e => setFormData(f => ({ ...f, institution: e.target.value }))}
                 />
               </div>
               <div className="form-group">
@@ -339,7 +339,7 @@ export default function AIVerify() {
                   className="filter-input"
                   type="text"
                   value={formData.course}
-                  onChange={e => setFormData(f => ({...f, course:e.target.value}))}
+                  onChange={e => setFormData(f => ({ ...f, course: e.target.value }))}
                 />
               </div>
             </div>
@@ -350,7 +350,7 @@ export default function AIVerify() {
                   className="filter-input"
                   type="number"
                   value={formData.income}
-                  onChange={e => setFormData(f => ({...f, income:e.target.value}))}
+                  onChange={e => setFormData(f => ({ ...f, income: e.target.value }))}
                 />
               </div>
               <div className="form-group">
@@ -359,7 +359,7 @@ export default function AIVerify() {
                   className="filter-input"
                   type="text"
                   value={formData.cgpa}
-                  onChange={e => setFormData(f => ({...f, cgpa:e.target.value}))}
+                  onChange={e => setFormData(f => ({ ...f, cgpa: e.target.value }))}
                 />
               </div>
             </div>
@@ -396,7 +396,7 @@ export default function AIVerify() {
           <div className="ai-engine-card">
             <div className="ae-header">
               <span className="ae-title">AI Verification Engine</span>
-              <span className={`ae-status${running?' running':done?' complete':''}`}>
+              <span className={`ae-status${running ? ' running' : done ? ' complete' : ''}`}>
                 {running ? 'Running…' : done ? 'Complete' : 'Idle'}
               </span>
             </div>
@@ -435,13 +435,13 @@ export default function AIVerify() {
                 <div className="aer-score-section">
                   <div className="aer-score-ring">
                     <svg className="ring-svg" viewBox="0 0 120 120">
-                      <circle className="ring-bg"   cx="60" cy="60" r="48" />
+                      <circle className="ring-bg" cx="60" cy="60" r="48" />
                       <circle
                         className="ring-fill"
                         cx="60" cy="60" r="48"
                         strokeDasharray={dashArray}
                         strokeDashoffset="0"
-                        style={{ transition:'stroke-dasharray 1.5s ease' }}
+                        style={{ transition: 'stroke-dasharray 1.5s ease' }}
                       />
                     </svg>
                     <div className="ring-inner">
@@ -451,11 +451,11 @@ export default function AIVerify() {
                   </div>
                   <div className="aer-details">
                     {[
-                      { label:'Identity Match', val:'Verified', cls:'ok' },
-                      { label:'Documents', val:'Authentic', cls:'ok' },
-                      { label:'Forgery Check', val:'Clean', cls:'ok' },
-                      { label:'Duplicates', val:'None', cls:'ok' },
-                      { label:'Income', val:'Confirmed', cls:'ok' },
+                      { label: 'Identity Match', val: 'Verified', cls: 'ok' },
+                      { label: 'Documents', val: 'Authentic', cls: 'ok' },
+                      { label: 'Forgery Check', val: 'Clean', cls: 'ok' },
+                      { label: 'Duplicates', val: 'None', cls: 'ok' },
+                      { label: 'Income', val: 'Confirmed', cls: 'ok' },
                     ].map(d => (
                       <div key={d.label} className="aerd-item">
                         <span className="aerd-label">{d.label}</span>
@@ -473,7 +473,7 @@ export default function AIVerify() {
                     const proofText = `======================================================================
 FUNDSCHEME — AI VERIFICATION PROOF CERTIFICATE
 ======================================================================
-VERIFICATION DATE  : ${new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+VERIFICATION DATE  : ${new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
 STUDENT NAME       : ${formData.name}
 STUDENT ID         : ${formData.id}
 INSTITUTION        : ${formData.institution}
@@ -534,7 +534,7 @@ public blockchain and cannot be altered or revoked.
       {/* HOW AI WORKS */}
       <section className="section section-dark">
         <div className="container">
-          <p className="section-label" style={{ textAlign:'center' }}>Under the Hood</p>
+          <p className="section-label" style={{ textAlign: 'center' }}>Under the Hood</p>
           <h2 className="section-title">How the AI Works</h2>
           <div className="ai-how-grid">
             {HOW_IT_WORKS.map(h => (

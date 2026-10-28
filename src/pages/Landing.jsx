@@ -216,6 +216,15 @@ export default function Landing() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // Close feature modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setFeatureModal(null)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   const goToSlide = (next) => {
     clearInterval(slideTimer.current)
     setSlide(next)
@@ -510,12 +519,31 @@ export default function Landing() {
           <p className="section-sub">Built for scale, trust, and total transparency.</p>
           <div className="features-grid">
             {FEATURES.map(f => (
-              <div key={f.title} className={`feature-card glow-card${f.featured ? ' featured' : ''}`}>
+              <div
+                key={f.title}
+                id={`feature-card-${f.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                className={`feature-card glow-card${f.featured ? ' featured' : ''}`}
+                onClick={() => setFeatureModal(f)}
+                style={{ cursor: 'pointer' }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFeatureModal(f) } }}
+              >
                 {f.featured && <div className="feature-glow"></div>}
                 <div className="feature-icon">{f.icon}</div>
                 <h3>{f.title}</h3>
                 <p>{f.desc}</p>
-                <button className="feature-link" onClick={() => setFeatureModal(f)}>Learn more →</button>
+                <button
+                  type="button"
+                  id={`feature-learn-${f.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                  className="feature-link"
+                  onClick={e => {
+                    e.stopPropagation()
+                    setFeatureModal(f)
+                  }}
+                >
+                  Learn more →
+                </button>
               </div>
             ))}
           </div>

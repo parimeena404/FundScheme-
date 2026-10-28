@@ -10,9 +10,24 @@ import {
   registerStudent,
   getStudentState,
   isOptedIn,
+  resetOnChainDemo,
   APP_ID,
 } from '../lib/scholarship-contract'
-import { loadAddress } from '../lib/perawallet'
+import {
+  loadAddress,
+  connectWallet,
+  connectDemoWallet,
+  disconnectWallet,
+  getWalletLabel,
+  getWalletMode,
+} from '../lib/perawallet'
+import {
+  getStudentApplications,
+  submitStudentApplication,
+  getStudentTokens,
+  redeemStudentToken,
+  subscribeAppSync,
+} from '../lib/appSync'
 
 const TABS = [
   { id: 'overview',     icon: '📊', label: 'My Overview' },
@@ -80,20 +95,8 @@ export default function UserDashboard() {
   const [verifyRunning, setVerifyRunning] = useState(false)
   const [verifyStep, setVerifyStep] = useState(-1)
   const [verifyDone, setVerifyDone] = useState(false)
-  const [myApps, setMyApps] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('my_apps') || localStorage.getItem('my_apps')
-      if (saved) return JSON.parse(saved)
-    } catch {}
-    return MY_APPLICATIONS
-  })
-  const [tokens, setTokens] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('my_tokens') || localStorage.getItem('my_tokens')
-      if (saved) return JSON.parse(saved)
-    } catch {}
-    return MY_TOKENS
-  })
+  const [myApps, setMyApps] = useState(() => getStudentApplications())
+  const [tokens, setTokens] = useState(() => getStudentTokens())
   const [toast, setToast] = useState(null)
   const [appDetail, setAppDetail] = useState(null)
   const [redeemModal, setRedeemModal] = useState(null)
@@ -102,22 +105,24 @@ export default function UserDashboard() {
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [trustScore, setTrustScore] = useState(88)
 
-  // Sync myApps and tokens across browser tabs/storage events
+  // Real-time synchronization with Gov Dashboard and storage events
   useEffect(() => {
-    const handleStorage = () => {
-      try {
-        const savedApps = sessionStorage.getItem('my_apps') || localStorage.getItem('my_apps')
-        if (savedApps) setMyApps(JSON.parse(savedApps))
-        const savedTokens = sessionStorage.getItem('my_tokens') || localStorage.getItem('my_tokens')
-        if (savedTokens) setTokens(JSON.parse(savedTokens))
-      } catch {}
-    }
-    window.addEventListener('storage', handleStorage)
-    window.addEventListener('focus', handleStorage)
-    return () => {
-      window.removeEventListener('storage', handleStorage)
-      window.removeEventListener('focus', handleStorage)
-    }
+    const unsub = subscribeAppSync((detail) => {
+      setMyApps(getStudentApplications())
+      setTokens(getStudentTokens())
+      if (detail?.type === 'application_updated' && detail?.app) {
+        const isApproved = detail.action === 'Approved'
+        setUserNotifs(prev => [{
+          id: Date.now(),
+          title: isApproved ? '🎉 Application Approved by Ministry!' : `⚠️ Status: ${detail.action}`,
+          desc: `${detail.app.scheme} (${detail.app.id}) was updated to "${detail.action}". ${isApproved ? 'Scholarship token minted on Algorand!' : ''}`,
+          time: 'Just now',
+          read: false,
+        }, ...prev])
+        showToast(isApproved ? `🎉 "${detail.app.scheme}" was APPROVED! New ASA token received.` : `Status updated: ${detail.app.scheme} (${detail.action})`)
+      }
+    })
+    return unsub
   }, [])
 
   // Topbar Notifications
@@ -147,6 +152,7 @@ export default function UserDashboard() {
   }
 
   // ── Contract state ──────────────────────────────────────
+  const [walletAddr,    setWalletAddr]    = useState(() => loadAddress())
   const [chainStatus,   setChainStatus]   = useState(null)
   const [chainOptedIn,  setChainOptedIn]  = useState(false)
   const [chainLoading,  setChainLoading]  = useState(false)
@@ -174,16 +180,34 @@ export default function UserDashboard() {
   }, [])
 
   useEffect(() => {
-    if (tab === 'onchain') {
-      const addr = loadAddress()
-      if (addr) refreshChainStatus(addr)
-      else setChainError('Connect your wallet (◎ Wallet) first to view smart contract status.')
+    const handleWalletChange = (e) => {
+      const a = e.detail?.address || loadAddress()
+      setWalletAddr(a)
+      if (a) refreshChainStatus(a)
+      else {
+        setChainStatus(null)
+        setChainOptedIn(false)
+      }
     }
-  }, [tab, refreshChainStatus])
+    window.addEventListener('pera_wallet_updated', handleWalletChange)
+    return () => window.removeEventListener('pera_wallet_updated', handleWalletChange)
+  }, [refreshChainStatus])
+
+  useEffect(() => {
+    if (tab === 'onchain') {
+      const addr = walletAddr || loadAddress()
+      if (addr) refreshChainStatus(addr)
+      else setChainError(null)
+    }
+  }, [tab, walletAddr, refreshChainStatus])
 
   const runChainAction = async (label, fn) => {
-    const addr = loadAddress()
-    if (!addr) { setChainError('Connect your wallet (◎ Wallet) first.'); return }
+    let addr = walletAddr || loadAddress()
+    if (!addr) {
+      addr = connectDemoWallet('student')
+      setWalletAddr(addr)
+      showToast('⚡ Auto-connected TestNet Student Wallet for signing.')
+    }
     setChainAction(label)
     setChainError(null)
     setChainTx(null)
@@ -191,6 +215,7 @@ export default function UserDashboard() {
       const signer = makePeraSigner(addr)
       const { txID } = await fn(addr, signer)
       setChainTx(txID)
+      showToast(`✅ ${label} completed on Algorand TestNet!`)
       await refreshChainStatus(addr)
     } catch (e) {
       setChainError(
@@ -205,12 +230,14 @@ export default function UserDashboard() {
 
   const navigate = useNavigate()
 
-  // ── Session: read logged-in citizen ───────────────────────────────
+  // ── Session: read logged-in citizen with default fallback ─────────
   const citizen = (() => {
-    try { return JSON.parse(sessionStorage.getItem('citizen_user') || 'null') }
-    catch { return null }
+    try {
+      const stored = sessionStorage.getItem('citizen_user')
+      if (stored) return JSON.parse(stored)
+    } catch {}
+    return { name: 'Divya S. Krishnamurthy', phone: '9876543210', employment: 'Student · B.E. ECE', aadhaarLast4: '4821' }
   })()
-  useEffect(() => { if (!citizen) navigate('/') }, [])
 
   const [profile, setProfile] = useState({
     name: citizen?.name || 'Divya S. Krishnamurthy',
@@ -266,52 +293,35 @@ export default function UserDashboard() {
     if (!applyForm.name.trim()) { showToast('Please enter your full name.', 'error'); return }
     if (!applyForm.institution.trim()) { showToast('Please enter your institution.', 'error'); return }
 
-    const newApp = {
-      id: `APP-2026-${String(Date.now()).slice(-6)}`,
+    const newApp = submitStudentApplication({
       scheme: applyModal.name,
-      date: new Date().toISOString().slice(0, 10),
       amount: applyModal.amount,
-      status: 'Pending Review',
-      aiScore: Math.floor(84 + Math.random() * 12),
-      remarks: 'Submitted — queued for Algorand smart contract verification',
       name: applyForm.name.trim(),
       studentId: applyForm.studentId || profile.studentId || `STU-2026-${String(Date.now()).slice(-4)}`,
       inst: applyForm.institution.trim(),
       course: applyForm.course || profile.course || 'B.Tech / Degree',
       income: applyForm.income ? `₹${Number(applyForm.income).toLocaleString()}` : profile.income,
-      officer: null,
-      submittedAt: new Date().toLocaleString(),
-    }
-    setMyApps(prev => {
-      const updated = [newApp, ...prev]
-      try {
-        sessionStorage.setItem('my_apps', JSON.stringify(updated))
-        localStorage.setItem('my_apps', JSON.stringify(updated))
-      } catch {}
-      return updated
+      bankAcc: applyForm.bankAcc || profile.bankAcc,
+      ifsc: applyForm.bankIfsc || profile.ifsc,
     })
 
-    // Also share with GovDashboard via localStorage
-    try {
-      const govExtra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
-      localStorage.setItem('gov_extra_apps', JSON.stringify([newApp, ...govExtra]))
-    } catch {}
+    setMyApps(getStudentApplications())
 
     // Add notification for the submitted application
     setUserNotifs(prev => [{
       id: Date.now(),
       title: '📝 Application Submitted!',
-      desc: `Your application for "${applyModal.name}" (${newApp.id}) has been submitted and is queued for AI verification.`,
+      desc: `Your application for "${applyModal.name}" (${newApp.id}) submitted at ${newApp.time}. Live in Gov Portal review queue.`,
       time: 'Just now',
       read: false,
     }, ...prev])
 
     setApplyModal(null)
     setApplyForm({ name: '', studentId: '', institution: '', income: '', course: '', bankIfsc: '', bankAcc: '' })
-    showToast(`✅ Application submitted for "${applyModal.name}"! Switching to My Applications…`)
+    showToast(`✅ Application submitted for "${applyModal.name}" at ${newApp.time}! Sent to Gov Portal.`)
 
     // Auto-switch to My Applications tab after a brief delay
-    setTimeout(() => setTab('applications'), 600)
+    setTimeout(() => setTab('applications'), 500)
   }
 
   // ── Withdraw application handler ────────────────────────────────
@@ -319,15 +329,15 @@ export default function UserDashboard() {
     setMyApps(prev => {
       const updated = prev.filter(a => a.id !== appId)
       try {
-        sessionStorage.setItem('my_apps', JSON.stringify(updated))
+        localStorage.setItem('fundscheme_applications', JSON.stringify(updated))
         localStorage.setItem('my_apps', JSON.stringify(updated))
+        sessionStorage.setItem('my_apps', JSON.stringify(updated))
+        localStorage.setItem('gov_all_apps', JSON.stringify(updated))
+        const govExtra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
+        localStorage.setItem('gov_extra_apps', JSON.stringify(govExtra.filter(a => a.id !== appId)))
       } catch {}
       return updated
     })
-    try {
-      const govExtra = JSON.parse(localStorage.getItem('gov_extra_apps') || '[]')
-      localStorage.setItem('gov_extra_apps', JSON.stringify(govExtra.filter(a => a.id !== appId)))
-    } catch {}
     if (appDetail?.id === appId) setAppDetail(null)
     showToast(`Application ${appId} has been withdrawn.`)
   }
@@ -337,19 +347,13 @@ export default function UserDashboard() {
     if (!redeemModal) return
     setRedeeming(true)
     setTimeout(() => {
-      setTokens(prev => {
-        const updated = prev.map(t => t.id === redeemModal.id ? { ...t, status: 'redeemed' } : t)
-        try {
-          sessionStorage.setItem('my_tokens', JSON.stringify(updated))
-          localStorage.setItem('my_tokens', JSON.stringify(updated))
-        } catch {}
-        return updated
-      })
+      redeemStudentToken(redeemModal.id, redeemMethod)
+      setTokens(getStudentTokens())
       setRedeeming(false)
       const tokenName = redeemModal.scheme
       setRedeemModal(null)
-      showToast(`🎉 ₹${redeemModal.amount.toLocaleString()} successfully redeemed via ${redeemMethod === 'bank' ? 'Direct Bank Transfer' : 'College Tuition Escrow'}!`)
-    }, 1400)
+      showToast(`🎉 ₹${redeemModal.amount.toLocaleString()} successfully redeemed via ${redeemMethod === 'bank' ? 'Direct Bank Transfer (DBT)' : 'College Tuition Escrow'}!`)
+    }, 1200)
   }
 
   // ── Download Acknowledgement Slip ───────────────────────────────
@@ -733,7 +737,9 @@ Status             : CONFIRMED ON-CHAIN
                   <div key={a.id} className="my-app-card" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', alignItems: 'center', gap: '1rem' }}>
                     <div>
                       <div className="mac-scheme" style={{ fontWeight: 600 }}>{a.scheme}</div>
-                      <div className="mac-date" style={{ fontSize: '.78rem', color: 'var(--text-3)' }}>Application ID: {a.id} · Applied: {a.date}</div>
+                      <div className="mac-date" style={{ fontSize: '.78rem', color: 'var(--text-3)' }}>
+                        Application ID: {a.id} · Applied: {a.submittedAt || `${a.date}${a.time ? ` · ${a.time}` : ''}`}
+                      </div>
                     </div>
                     <div>
                       <StatusBadge status={a.status} />
@@ -763,11 +769,106 @@ Status             : CONFIRMED ON-CHAIN
               </div>
               <button
                 className="btn-sm btn-view"
-                onClick={() => { const a = loadAddress(); if (a) refreshChainStatus(a) }}
+                onClick={() => { const a = walletAddr || loadAddress(); if (a) refreshChainStatus(a) }}
                 disabled={chainLoading}
               >
                 {chainLoading ? '↻ Loading…' : '↻ Refresh Chain'}
               </button>
+            </div>
+
+            {/* Wallet Connection Bar */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(79,70,229,.12), rgba(6,182,212,.08))',
+              border: '1px solid rgba(129,140,248,.3)',
+              borderRadius: '14px',
+              padding: '1.2rem 1.4rem',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem',
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+                  <span>◎</span> {walletAddr ? `Connected: ${walletAddr.slice(0, 8)}…${walletAddr.slice(-6)}` : 'Algorand TestNet Wallet'}
+                  {walletAddr && (
+                    <span style={{ fontSize: '.72rem', background: 'rgba(16,185,129,.15)', color: '#10b981', padding: '.2rem .55rem', borderRadius: '6px', fontWeight: 700 }}>
+                      ✔ Connected ({getWalletLabel() || 'TestNet'})
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '.8rem', color: 'var(--text-2)', marginTop: '.25rem' }}>
+                  {walletAddr
+                    ? `Ready to execute smart contract operations on App ID ${APP_ID}`
+                    : 'Connect via Pera Wallet (QR / Web) or select 1-click TestNet Student Wallet to opt-in and receive disbursements.'}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
+                {!walletAddr ? (
+                  <>
+                    <button
+                      className="btn-primary"
+                      style={{ fontSize: '.84rem', padding: '.55rem 1rem' }}
+                      onClick={async () => {
+                        try {
+                          const a = await connectWallet()
+                          setWalletAddr(a)
+                          refreshChainStatus(a)
+                          showToast('🔗 Connected via Pera Wallet!')
+                        } catch (e) {
+                          showToast(e.message, 'error')
+                        }
+                      }}
+                    >
+                      🔗 Connect Pera Wallet
+                    </button>
+                    <button
+                      className="btn-sm btn-view"
+                      style={{ fontSize: '.84rem', padding: '.55rem .9rem', background: 'rgba(79,70,229,.15)', color: 'var(--accent)', border: '1px solid rgba(129,140,248,.3)' }}
+                      onClick={() => {
+                        const a = connectDemoWallet('student')
+                        setWalletAddr(a)
+                        refreshChainStatus(a)
+                        showToast('⚡ Connected with TestNet Student Wallet!')
+                      }}
+                    >
+                      ⚡ 1-Click TestNet Wallet
+                    </button>
+                    <button
+                      className="btn-sm btn-view"
+                      style={{ fontSize: '.84rem', padding: '.55rem .8rem' }}
+                      onClick={() => navigate('/wallet')}
+                    >
+                      Full Wallet Hub →
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="btn-sm btn-view"
+                      style={{ fontSize: '.84rem' }}
+                      onClick={() => navigate('/wallet')}
+                    >
+                      Open Wallet Hub ↗
+                    </button>
+                    <button
+                      className="btn-sm btn-reject"
+                      style={{ fontSize: '.84rem' }}
+                      onClick={() => {
+                        disconnectWallet()
+                        setWalletAddr(null)
+                        setChainStatus(null)
+                        setChainOptedIn(false)
+                        showToast('Wallet disconnected.')
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {chainTx && (
@@ -923,18 +1024,28 @@ Status             : CONFIRMED ON-CHAIN
                     </button>
                   </div>
 
-                  {/* Step 3+: waiting for authority */}
-                  {chainOptedIn && chainStatus?.isRegistered && !chainStatus?.milestoneCompleted && (
-                    <div style={{ background: 'rgba(245,158,11,.08)', border: '1px solid rgba(245,158,11,.25)', borderRadius: '10px', padding: '.85rem 1rem', color: '#f59e0b', fontSize: '.85rem', lineHeight: 1.6 }}>
-                      ⏳ <strong>Awaiting academic milestone approval</strong><br />
-                      The government officer must call <code>mark_milestone_complete</code> for your wallet before payout execution.
-                    </div>
-                  )}
-                  {chainStatus?.milestoneCompleted && !chainStatus?.hasBeenPaid && (
-                    <div style={{ background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.25)', borderRadius: '10px', padding: '.85rem 1rem', color: '#60a5fa', fontSize: '.85rem', lineHeight: 1.6 }}>
-                      ✅ Milestone verified! <strong>Ready for officer disbursement</strong> via inner contract transaction.
-                    </div>
-                  )}
+                  {/* Reset demo onchain state */}
+                  <div style={{ borderTop: '1px solid var(--border-2)', paddingTop: '.85rem', marginTop: '.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '.75rem', color: 'var(--text-3)' }}>Testing lifecycle again?</span>
+                    <button
+                      type="button"
+                      className="btn-sm"
+                      style={{ fontSize: '.75rem', padding: '.3rem .65rem', background: 'rgba(239,68,68,.12)', color: '#f87171', border: '1px solid rgba(239,68,68,.25)' }}
+                      onClick={() => {
+                        const addr = walletAddr || loadAddress()
+                        if (addr) {
+                          resetOnChainDemo(addr)
+                          setChainOptedIn(false)
+                          setChainStatus(null)
+                          setChainTx(null)
+                          setChainError(null)
+                          showToast('🔄 Demo on-chain state reset to Step 1.')
+                        }
+                      }}
+                    >
+                      🔄 Reset Demo Lifecycle
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1729,6 +1840,29 @@ Status             : CONFIRMED ON-CHAIN
           </div>
         </div>
       )}
+
+      {/* MOBILE APP BOTTOM NAVIGATION DOCK */}
+      <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            className={`mb-item${tab === t.id ? ' active' : ''}`}
+            onClick={() => {
+              setTab(t.id)
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+          >
+            <span className="mb-icon">
+              {t.icon}
+              {t.id === 'applications' && myApps.length > 0 && (
+                <span className="mb-badge">{myApps.length}</span>
+              )}
+            </span>
+            <span className="mb-label">{t.label.replace('My ', '')}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

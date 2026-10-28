@@ -334,9 +334,22 @@ function GovAuth({ onDone }) {
           <p className="auth-success-sub" style={{marginTop:'.7rem', fontSize:'.82rem'}}>
             Save this ID. You'll use it to log in.<br/>Account is under review — you'll be notified at <strong>{email}</strong>.
           </p>
-          <button className="btn-primary w-full mt-1" onClick={() => setScreen('login')}>
-            Go to Login →
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem', marginTop: '1rem' }}>
+            <button
+              className="btn-primary w-full"
+              onClick={() => onDone(successData || { orgName, scheme, orgId, email })}
+            >
+              🚀 Enter Dashboard Now →
+            </button>
+            <button
+              type="button"
+              className="btn-ghost w-full"
+              style={{ fontSize: '.84rem', padding: '.45rem' }}
+              onClick={() => setScreen('login')}
+            >
+              Go to Login
+            </button>
+          </div>
         </div>
       </>
     )
@@ -361,7 +374,7 @@ function GovAuth({ onDone }) {
 
           {/* Demo credentials hint */}
           <div className="demo-credentials-box">
-            <div className="demo-cred-title">🔑 Demo Credentials</div>
+            <div className="demo-cred-title">🔑 Demo Officer Credentials</div>
             <div className="demo-cred-row">
               <span>Org ID:</span><code>ES-GOV-0001</code>
               <button type="button" className="copy-btn" onClick={() => { setLoginOrgId('ES-GOV-0001'); clr() }}>Use</button>
@@ -370,6 +383,18 @@ function GovAuth({ onDone }) {
               <span>Password:</span><code>govdemo123</code>
               <button type="button" className="copy-btn" onClick={() => { setLoginPass('govdemo123'); clr() }}>Use</button>
             </div>
+            <button
+              type="button"
+              className="copy-btn w-full mt-1"
+              style={{ padding: '.45rem .75rem', fontSize: '.8rem', background: 'rgba(129,140,248,.18)', color: 'var(--accent)', border: '1px solid rgba(129,140,248,.35)', borderRadius: '6px' }}
+              onClick={() => {
+                setLoginOrgId('ES-GOV-0001')
+                setLoginPass('govdemo123')
+                clr()
+              }}
+            >
+              ⚡ 1-Click Auto-Fill Demo Officer
+            </button>
           </div>
 
           <div className="form-group">
@@ -398,8 +423,79 @@ function GovAuth({ onDone }) {
       {screen === 'register' && (
         <form className="modal-form" onSubmit={handleRegister}>
           <div className="modal-step-title">Register Your Organisation</div>
-          <p className="modal-step-sub">Fill all details to get your Organisation ID</p>
+          <p className="modal-step-sub">Fill details below or use demo credentials for instant evaluation</p>
           <MsgBox msg={err} type="error" />
+
+          {/* Demo Organisation Credentials Box */}
+          <div className="demo-credentials-box" style={{ background: 'rgba(129,140,248,.08)', borderColor: 'rgba(129,140,248,.25)', marginBottom: '1.25rem' }}>
+            <div className="demo-cred-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.4rem' }}>
+              <span>🏢 Demo Organisation Credentials</span>
+              <span style={{ fontSize: '.72rem', background: 'rgba(129,140,248,.2)', padding: '.15rem .45rem', borderRadius: '4px', color: 'var(--accent)' }}>Quick Fill</span>
+            </div>
+            <p style={{ fontSize: '.76rem', color: 'var(--text-3)', margin: '0 0 .6rem 0' }}>Click either profile to auto-fill all 7 required signup fields:</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.5rem', marginBottom: '.6rem' }}>
+              <button
+                type="button"
+                className="copy-btn"
+                style={{ background: 'var(--bg-2, rgba(255,255,255,.05))', border: '1px solid var(--border-2)', borderRadius: '8px', padding: '.5rem .6rem', fontSize: '.78rem', textAlign: 'left', cursor: 'pointer', color: 'var(--text)', display: 'block' }}
+                onClick={() => {
+                  setOrgName('Department of Higher Education, Ministry of Education')
+                  setWebsite('https://scholarships.gov.in')
+                  setScheme('PM Scholarship Scheme')
+                  setEmail('nodalofficer@education.gov.in')
+                  setContact('Dr. Vikram Malhotra (Joint Secretary)')
+                  setRegPass('GovPass@2026!')
+                  setRegPass2('GovPass@2026!')
+                  clr()
+                }}
+              >
+                🏛️ <strong>Central Ministry</strong><br/>
+                <span style={{ fontSize: '.7rem', color: 'var(--text-3)' }}>NSP · PM Scholarship</span>
+              </button>
+              <button
+                type="button"
+                className="copy-btn"
+                style={{ background: 'var(--bg-2, rgba(255,255,255,.05))', border: '1px solid var(--border-2)', borderRadius: '8px', padding: '.5rem .6rem', fontSize: '.78rem', textAlign: 'left', cursor: 'pointer', color: 'var(--text)', display: 'block' }}
+                onClick={() => {
+                  setOrgName('Madhya Pradesh Higher Education Department')
+                  setWebsite('https://highereducation.mp.gov.in')
+                  setScheme('Mukhyamantri Medhavi Vidyarthi Yojana')
+                  setEmail('director.scholarships@mp.gov.in')
+                  setContact('Smt. Sunita Rao (Deputy Commissioner)')
+                  setRegPass('GovPass@2026!')
+                  setRegPass2('GovPass@2026!')
+                  clr()
+                }}
+              >
+                🏫 <strong>State Directorate</strong><br/>
+                <span style={{ fontSize: '.7rem', color: 'var(--text-3)' }}>Madhya Pradesh · MMVY</span>
+              </button>
+            </div>
+            <div style={{ borderTop: '1px solid var(--border-2)', paddingTop: '.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '.74rem', color: 'var(--text-2)' }}>Want to bypass form submit?</span>
+              <button
+                type="button"
+                className="copy-btn"
+                style={{ background: 'rgba(16,185,129,.18)', color: '#10b981', borderColor: 'rgba(16,185,129,.35)', fontWeight: 600, padding: '.3rem .6rem' }}
+                onClick={() => {
+                  const instantOrg = {
+                    id: 'demo-gov-instant',
+                    orgName: 'National Scholarship Division (Ministry of Education)',
+                    website: 'https://scholarships.gov.in',
+                    scheme: 'PM Scholarship Scheme',
+                    email: 'admin.nsp@gov.in',
+                    contact: 'Director General (Scholarships)',
+                    orgId: 'ES-NSP-2026',
+                    status: 'active',
+                  }
+                  sessionStorage.setItem('gov_org', JSON.stringify(instantOrg))
+                  onDone(instantOrg)
+                }}
+              >
+                ⚡ Instant Launch Portal
+              </button>
+            </div>
+          </div>
 
           <div className="form-group">
             <label>Organisation Name *</label>

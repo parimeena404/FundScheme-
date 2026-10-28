@@ -146,6 +146,7 @@
   mask-composite: exclude;
   opacity: 0;
   transition: opacity .4s;
+  pointer-events: none;
 }
 .glow-card:hover::before { opacity: 1; }
 .glow-card:hover {
@@ -548,9 +549,10 @@
 .fmodal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.72);
-  backdrop-filter: blur(6px);
-  z-index: 6000;
+  background: rgba(0,0,0,.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
